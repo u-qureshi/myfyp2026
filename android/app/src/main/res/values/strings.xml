@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SmartScheduler</string>
+    <string name="title_activity_main">SmartScheduler</string>
+    <string name="package_name">com.smartscheduler.app</string>
+    <string name="custom_url_scheme">com.smartscheduler.app</string>
+</resources>

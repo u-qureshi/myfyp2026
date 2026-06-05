@@ -30,9 +30,18 @@
         "start": "next start",
         "lint": "next lint",
         "type-check": "tsc --noEmit",
-        "db:student-portal": "node scripts/run-student-portal-schema.mjs"
+        "db:student-portal": "node scripts/run-student-portal-schema.mjs",
+        "android:init": "npx cap add android",
+        "android:sync": "npx cap sync android",
+        "android:open": "npx cap open android",
+        "android:dev-url": "node scripts/capacitor-set-dev-url.mjs",
+        "android:apk:debug": "cd android && JAVA_HOME=\"$(/usr/libexec/java_home -v 25)\" ./gradlew assembleDebug",
+        "android:apk:release": "cd android && JAVA_HOME=\"$(/usr/libexec/java_home -v 25)\" ./gradlew assembleRelease"
     },
     "dependencies": {
+        "@capacitor/android": "^7.6.6",
+        "@capacitor/cli": "^7.6.6",
+        "@capacitor/core": "^7.6.6",
         "@hookform/resolvers": "^5.1.1",
         "@radix-ui/react-accordion": "^1.2.11",
         "@radix-ui/react-alert-dialog": "^1.1.14",

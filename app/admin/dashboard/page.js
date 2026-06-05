@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,6 +34,21 @@ import {
   mergeSavedConstraints,
   STANDARD_TIMETABLE_TIME_SLOTS
 } from '@/lib/timetable-helpers'
+
+const VALID_PAGES = ['dashboard', 'data-management', 'generate', 'view-timetable', 'settings']
+
+function PageQuerySync({ onPageChange }) {
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const page = searchParams.get('page')
+    if (page && VALID_PAGES.includes(page)) {
+      onPageChange(page)
+    }
+  }, [searchParams, onPageChange])
+
+  return null
+}
 
 export default function AdminDashboard() {
   const [currentPage, setCurrentPage] = useState('dashboard')
@@ -69,15 +84,6 @@ export default function AdminDashboard() {
     gapsWeight: 75
   })
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const searchParams = useSearchParams()
-
-  useEffect(() => {
-    const page = searchParams.get('page')
-    const valid = ['dashboard', 'data-management', 'generate', 'view-timetable', 'settings']
-    if (page && valid.includes(page)) {
-      setCurrentPage(page)
-    }
-  }, [searchParams])
   const [metrics, setMetrics] = useState({ students: null, faculty: null, rooms: null })
   const [dataByType, setDataByType] = useState({ 
     students: [
@@ -864,6 +870,9 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#f4f6f9] lg:flex">
+      <Suspense fallback={null}>
+        <PageQuerySync onPageChange={setCurrentPage} />
+      </Suspense>
       <Toaster />
 
       {sidebarOpen && (

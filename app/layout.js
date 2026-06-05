@@ -6,7 +6,16 @@ export const metadata = {
   icons: {
     icon: '/images/smartscheduler-logo.png',
     apple: '/images/smartscheduler-logo.png'
-  }
+  },
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'SmartScheduler',
+  },
+  formatDetection: {
+    telephone: false,
+  },
 }
 
 export default function RootLayout({ children }) {
