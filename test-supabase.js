@@ -30,7 +30,7 @@ async function test() {
       console.log('   This is expected if tables haven\'t been created yet\n')
     } else {
       console.log('✓ Database connected and tables exist')
-      console.log('  Users table row count:', data)\n
+      console.log('  Users table row count:', data, '\n')
     }
 
     // Test 3: Verify environment

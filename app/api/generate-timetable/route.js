@@ -53,6 +53,12 @@ class TimetableOptimizer {
     return hours * 60 + minutes
   }
 
+  getTimeLabel(time) {
+    if (!time) return ''
+    if (typeof time === 'object') return time.label || ''
+    return time
+  }
+
   // Core AI Rules Implementation
   validateRule1(studentId, timeSlot, roomId) {
     // Rule 1: A student cannot be in two places at once
@@ -95,6 +101,9 @@ class TimetableOptimizer {
 
   // Helper method to try scheduling a course at a specific slot
   tryScheduleCourseAtSlot(course, day, time, slotKey, usedSlots, timetable, facultyWorkload, courseIndex = 0, sessionNumber = 1) {
+    const timeLabel = this.getTimeLabel(time)
+    const resolvedSlotKey = slotKey || `${day}-${timeLabel}`
+
     // Find faculty who can teach this subject
     let availableFaculty = []
     if (course.type === 'elective') {
@@ -142,7 +151,7 @@ class TimetableOptimizer {
         const facultyAlreadyScheduled = timetable.some(slot => 
           slot.facultyId === facultyId &&
           slot.day === day &&
-          slot.timeSlot === time
+          slot.timeSlot === timeLabel
         )
         if (facultyAlreadyScheduled) return false
       }
@@ -155,7 +164,7 @@ class TimetableOptimizer {
           .pop()
         
         if (lastSlot) {
-          const currentTimeMinutes = this.getTimeInMinutes(time)
+          const currentTimeMinutes = this.getTimeInMinutes(timeLabel)
           const lastEndTimeMinutes = this.getTimeInMinutes(lastSlot.timeSlot) + 60 // Assume 1-hour classes
           const breakGap = currentTimeMinutes - lastEndTimeMinutes
           
@@ -196,7 +205,7 @@ class TimetableOptimizer {
       const roomAlreadyBooked = timetable.some(slot => 
         (slot.roomId === (selectedRoom.id || selectedRoom['Room ID'] || selectedRoom.Room_ID)) &&
         slot.day === day &&
-        slot.timeSlot === time
+        slot.timeSlot === timeLabel
       )
       if (roomAlreadyBooked) {
         return false
@@ -218,16 +227,16 @@ class TimetableOptimizer {
       roomId: selectedRoom.id || selectedRoom['Room ID'] || selectedRoom.Room_ID,
       roomName: selectedRoom.Name || selectedRoom.name || selectedRoom.Room_Name,
       day: day,
-      timeSlot: time,
+      timeSlot: timeLabel,
       students: course.students.map(s => s.id || s['Student ID'] || s.Student_ID),
       studentCount: course.students.length,
       studentNames: course.students.map(s => s.Name || s.name || s.Student_Name),
       courseType: course.type
     })
 
-    usedSlots.add(slotKey)
+    usedSlots.add(resolvedSlotKey)
     facultyWorkload[facultyId].currentHours++
-    console.log(`✅ Scheduled ${course.name}${sessionNumber > 1 ? ` (Session ${sessionNumber})` : ''} on ${day} at ${time} with ${selectedFaculty.Name || selectedFaculty.name} (${facultyWorkload[facultyId].currentHours}/${facultyWorkload[facultyId].maxHours} hours)`)
+    console.log(`✅ Scheduled ${course.name}${sessionNumber > 1 ? ` (Session ${sessionNumber})` : ''} on ${day} at ${timeLabel} with ${selectedFaculty.Name || selectedFaculty.name} (${facultyWorkload[facultyId].currentHours}/${facultyWorkload[facultyId].maxHours} hours)`)
     
     return true
   }
@@ -240,7 +249,7 @@ class TimetableOptimizer {
       { start: '10:00 AM', end: '11:00 AM', label: '10:00 - 11:00 AM' },
       { start: '11:00 AM', end: '12:00 PM', label: '11:00 - 12:00 PM' },
       { start: '12:00 PM', end: '1:00 PM', label: '12:00 - 1:00 PM' },
-      { start: '1:00 PM', end: '1:30 PM', label: '1:00 - 1:30 PM (Lunch)' },
+      { start: '1:00 PM', end: '2:00 PM', label: '1:00 - 2:00 PM (Lunch)' },
       { start: '1:30 PM', end: '2:30 PM', label: '1:30 - 2:30 PM' },
       { start: '2:30 PM', end: '3:30 PM', label: '2:30 - 3:30 PM' },
       { start: '3:30 PM', end: '4:30 PM', label: '3:30 - 4:30 PM' }
@@ -250,7 +259,7 @@ class TimetableOptimizer {
     const usedSlots = new Set()
     const facultyWorkload = {}
     
-    // Add lunch break slot to all days (1:00 PM - 1:30 PM)
+    // Add lunch break slot to all days (1:00 PM - 2:00 PM)
     days.forEach(day => {
       timetable.push({
         id: `lunch-${day}`,
@@ -261,13 +270,13 @@ class TimetableOptimizer {
         roomId: null,
         roomName: null,
         day: day,
-        timeSlot: '1:00 - 1:30 PM (Lunch)',
+        timeSlot: '1:00 - 2:00 PM (Lunch)',
         students: [],
         studentCount: 0,
         studentNames: [],
         courseType: 'break'
       })
-      usedSlots.add(`${day}-1:00 - 1:30 PM (Lunch)`)
+      usedSlots.add(`${day}-1:00 - 2:00 PM (Lunch)`)
     })
 
     console.log('📚 Using uploaded data:')
@@ -411,7 +420,7 @@ class TimetableOptimizer {
       days.forEach(day => {
         scheduleGrid[day] = {}
         timeSlots.forEach(time => {
-          scheduleGrid[day][time] = {
+          scheduleGrid[day][time.label] = {
             faculty: null,
             room: null,
             course: null,
@@ -439,7 +448,7 @@ class TimetableOptimizer {
           // Try each time slot for this day
           for (let timeIndex = 0; timeIndex < timeSlots.length && !scheduled; timeIndex++) {
             const time = timeSlots[timeIndex]
-            const slotKey = `${day}-${time}`
+            const slotKey = `${day}-${time.label}`
             
             if (!usedSlots.has(slotKey)) {
               if (this.tryScheduleCourseAtSlot(course, day, time, slotKey, usedSlots, timetable, facultyWorkload, courseIndex)) {
@@ -472,7 +481,7 @@ class TimetableOptimizer {
           
           for (let timeIndex = 0; timeIndex < timeSlots.length && scheduledAdditional < additionalSessions; timeIndex++) {
             const time = timeSlots[timeIndex]
-            const slotKey = `${day}-${time}`
+            const slotKey = `${day}-${time.label}`
             
             if (!usedSlots.has(slotKey)) {
               if (this.tryScheduleCourseAtSlot(course, day, time, slotKey, usedSlots, timetable, facultyWorkload, courseIndex, scheduledAdditional + 1)) {
@@ -488,9 +497,9 @@ class TimetableOptimizer {
       const remainingSlots = []
       days.forEach(day => {
         timeSlots.forEach(time => {
-          const slotKey = `${day}-${time}`
+          const slotKey = `${day}-${time.label}`
           if (!usedSlots.has(slotKey)) {
-            remainingSlots.push({ day, time, slotKey })
+            remainingSlots.push({ day, timeLabel: time.label, slotKey })
           }
         })
       })
@@ -535,7 +544,7 @@ class TimetableOptimizer {
             const facultyAlreadyScheduled = timetable.some(tSlot => 
               tSlot.facultyId === facultyId &&
               tSlot.day === slot.day &&
-              tSlot.timeSlot === slot.time
+              tSlot.timeSlot === slot.timeLabel
             )
             
             if (!facultyAlreadyScheduled) {
@@ -548,7 +557,7 @@ class TimetableOptimizer {
                 roomId: selectedRoom.id || selectedRoom['Room ID'] || selectedRoom.Room_ID,
                 roomName: selectedRoom.Name || selectedRoom.name || selectedRoom.Room_Name,
                 day: slot.day,
-                timeSlot: slot.time,
+                timeSlot: slot.timeLabel,
                 students: this.students.slice(0, Math.min(10, this.students.length)).map(s => s.id || s['Student ID'] || s.Student_ID),
                 studentCount: Math.min(10, this.students.length),
                 studentNames: this.students.slice(0, Math.min(10, this.students.length)).map(s => s.Name || s.name || s.Student_Name),
@@ -557,7 +566,7 @@ class TimetableOptimizer {
               
               usedSlots.add(slot.slotKey)
               facultyWorkload[facultyId].currentHours++
-              console.log(`📚 Added ${activity} on ${slot.day} at ${slot.time}`)
+              console.log(`📚 Added ${activity} on ${slot.day} at ${slot.timeLabel}`)
             }
           }
         }
@@ -676,8 +685,11 @@ class TimetableOptimizer {
     // Simple mutation: change random slot's time or room
     if (timetable.length > 0) {
       const randomSlot = Math.floor(Math.random() * timetable.length)
-      const timeSlots = ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:30 PM', '2:30 PM', '3:30 PM']
-      timetable[randomSlot].timeSlot = timeSlots[Math.floor(Math.random() * timeSlots.length)]
+      const timeSlotLabels = [
+        '9:00 - 10:00 AM', '10:00 - 11:00 AM', '11:00 - 12:00 PM', '12:00 - 1:00 PM',
+        '1:30 - 2:30 PM', '2:30 - 3:30 PM', '3:30 - 4:30 PM'
+      ]
+      timetable[randomSlot].timeSlot = timeSlotLabels[Math.floor(Math.random() * timeSlotLabels.length)]
     }
     return timetable
   }
