@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast, Toaster } from 'sonner'
+import { SidebarBrandMark, BrandLoadingScreen, PortalHeaderBrand, BRAND_NAME } from '@/components/BrandLogo'
 import { 
   LogOut, Calendar, Clock, BookOpen, Bell, User, Menu, X, 
   Download, CheckCircle, AlertCircle, Zap
@@ -99,7 +100,7 @@ export default function FacultyDashboard() {
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+    return <BrandLoadingScreen message="Loading faculty portal..." />
   }
 
   if (!user) {
@@ -122,18 +123,13 @@ export default function FacultyDashboard() {
         <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-purple-600 to-purple-700 text-white p-4 z-50 transition-transform duration-300 w-64 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}>
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                <span className="text-purple-600 font-bold text-sm">SS</span>
-              </div>
-              <span className="font-bold text-sm">SmartScheduler</span>
-            </div>
+          <div className="relative mb-8 flex justify-center pt-1">
+            <SidebarBrandMark size={72} priority />
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-white hover:bg-purple-500"
+              className="absolute right-0 top-0 lg:hidden text-white hover:bg-purple-500"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -222,15 +218,16 @@ export default function FacultyDashboard() {
                 >
                   <Menu className="h-4 w-4" />
                 </Button>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Faculty Portal</h1>
-                  <p className="text-sm text-gray-500">SmartScheduler.AI</p>
-                </div>
+                <PortalHeaderBrand
+                  title="Faculty Portal"
+                  subtitle={BRAND_NAME}
+                  titleClassName="text-2xl font-bold text-gray-900"
+                />
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">
                   <p className="text-sm font-semibold text-gray-900">{user.name}</p>
-                  <p className="text-xs text-gray-500">{user.email}</p>
+                  <p className="text-xs text-gray-500">{user.designation || user.email}</p>
                 </div>
                 <Button
                   onClick={handleLogout}
@@ -252,7 +249,9 @@ export default function FacultyDashboard() {
               <Card className="border-0 shadow-md bg-gradient-to-r from-purple-50 to-purple-100 border-l-4 border-l-purple-600">
                 <CardHeader>
                   <CardTitle className="text-2xl">Welcome, {user.name}! 👋</CardTitle>
-                  <CardDescription>Computer Science Department • Fall 2025</CardDescription>
+                  <CardDescription>
+                    {user.department_name || 'Faculty Department'} • {user.designation || 'Faculty Member'} • Fall 2025
+                  </CardDescription>
                 </CardHeader>
               </Card>
 
@@ -531,7 +530,17 @@ export default function FacultyDashboard() {
                     <Label htmlFor="department">Department</Label>
                     <Input
                       id="department"
-                      value="Computer Science"
+                      value={user.department_name || 'Faculty Department'}
+                      disabled
+                      className="bg-gray-50"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="designation">Designation</Label>
+                    <Input
+                      id="designation"
+                      value={user.designation || 'Faculty Member'}
                       disabled
                       className="bg-gray-50"
                     />

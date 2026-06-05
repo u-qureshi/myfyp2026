@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { supabaseServer } from '@/lib/supabase'
+import {
+  findFacultyByLoginIdentifier,
+  getFacultyMetadata,
+  normalizeName
+} from '@/lib/faculty-data'
 
-// Helper function to handle CORS
 function handleCORS(response) {
   response.headers.set('Access-Control-Allow-Origin', process.env.CORS_ORIGINS || '*')
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
@@ -15,11 +19,73 @@ export async function OPTIONS() {
   return handleCORS(new NextResponse(null, { status: 200 }))
 }
 
+async function findUserByIdentifier(identifier) {
+  const trimmed = String(identifier || '').trim()
+  if (!trimmed) return null
+
+  const selectQuery = '*, departments(name, code)'
+
+  if (trimmed.includes('@')) {
+    const { data, error } = await supabaseServer
+      .from('users')
+      .select(selectQuery)
+      .eq('email', trimmed)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    return data || null
+  }
+
+  const facultyMeta = findFacultyByLoginIdentifier(trimmed)
+  if (facultyMeta?.email) {
+    const { data, error } = await supabaseServer
+      .from('users')
+      .select(selectQuery)
+      .eq('email', facultyMeta.email)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    if (data) return data
+  }
+
+  const { data: candidates, error: searchError } = await supabaseServer
+    .from('users')
+    .select(selectQuery)
+    .eq('role', 'faculty')
+    .ilike('name', `%${trimmed}%`)
+
+  if (searchError) throw searchError
+  if (!candidates?.length) return null
+
+  const normalizedInput = normalizeName(trimmed)
+  const exactMatch = candidates.find(
+    (user) => normalizeName(user.name) === normalizedInput
+  )
+  if (exactMatch) return exactMatch
+
+  return candidates.length === 1 ? candidates[0] : null
+}
+
+function buildSessionUser(user) {
+  const metadata = getFacultyMetadata({ email: user.email, name: user.name })
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    department_id: user.department_id,
+    department_name:
+      metadata?.department_name || user.departments?.name || 'Faculty Department',
+    department_code: metadata?.dept || user.departments?.code || null,
+    designation: metadata?.designation || 'Faculty Member'
+  }
+}
+
 export async function POST(request) {
   try {
     const body = await request.json()
 
-    // Validate request body
     if (!body || typeof body !== 'object') {
       return handleCORS(
         NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
@@ -27,88 +93,57 @@ export async function POST(request) {
     }
 
     const { email, password } = body
+    const identifier = String(email || '').trim()
 
-    // Validate required fields
-    if (!email || !password) {
+    if (!identifier || !password) {
       return handleCORS(
         NextResponse.json(
-          { error: 'Email and password are required' },
+          { error: 'Email/name and password are required' },
           { status: 400 }
         )
       )
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      return handleCORS(
-        NextResponse.json({ error: 'Invalid email format' }, { status: 400 })
-      )
+    if (!emailRegex.test(identifier) && identifier.includes(' ')) {
+      console.log('Name-based login attempt for faculty')
     }
 
-    console.log('Login attempt for:', email)
+    console.log('Login attempt for:', identifier)
 
-    // Query Supabase for user
-    const { data: users, error: queryError } = await supabaseServer
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single()
+    const user = await findUserByIdentifier(identifier)
 
-    if (queryError && queryError.code !== 'PGRST116') {
-      console.error('Database query error:', queryError)
+    if (!user) {
+      console.log('User not found:', identifier)
       return handleCORS(
         NextResponse.json(
-          { error: 'Database error occurred' },
-          { status: 500 }
-        )
-      )
-    }
-
-    // User not found
-    if (!users) {
-      console.log('User not found:', email)
-      return handleCORS(
-        NextResponse.json(
-          { error: 'Invalid email or password' },
+          { error: 'Invalid email/name or password' },
           { status: 401 }
         )
       )
     }
 
-    // Verify password
-    const passwordMatch = await bcrypt.compare(password, users.password_hash)
+    const passwordMatch = await bcrypt.compare(password, user.password_hash)
 
     if (!passwordMatch) {
-      console.log('Password mismatch for:', email)
+      console.log('Password mismatch for:', user.email)
       return handleCORS(
         NextResponse.json(
-          { error: 'Invalid email or password' },
+          { error: 'Invalid email/name or password' },
           { status: 401 }
         )
       )
     }
 
-    console.log('Login successful for:', users.email, 'role:', users.role)
+    const sessionUser = buildSessionUser(user)
+    console.log('Login successful for:', sessionUser.email, 'role:', sessionUser.role)
 
-    // Create response
     const response = NextResponse.json({
       success: true,
-      user: {
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        role: users.role
-      }
+      user: sessionUser
     })
 
-    // Set session cookie (non-httpOnly so middleware can access it)
-    response.cookies.set('user_session', JSON.stringify({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role
-    }), {
+    response.cookies.set('user_session', JSON.stringify(sessionUser), {
       httpOnly: false,
       secure: false,
       sameSite: 'lax',

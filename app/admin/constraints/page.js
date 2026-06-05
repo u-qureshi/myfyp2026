@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Menu, X, LogOut, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { SidebarBrandMark, PortalHeaderBrand } from '@/components/BrandLogo'
 import { toast, Toaster } from 'sonner'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
@@ -211,15 +212,13 @@ export default function ConstraintsManagement() {
       <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-purple-600 to-purple-700 text-white p-4 z-50 transition-transform duration-300 ease-in-out ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       } w-64`}>
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-purple-200">SmartScheduler</span>
-          </div>
+        <div className="relative mb-8 flex justify-center pt-1">
+          <SidebarBrandMark size={72} priority />
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-white hover:bg-purple-500"
+            className="absolute right-0 top-0 lg:hidden text-white hover:bg-purple-500"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -311,7 +310,7 @@ export default function ConstraintsManagement() {
         {/* Header */}
         <div className="sticky top-0 z-40 bg-white border-b border-purple-200 shadow-sm">
           <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 min-w-0">
               <Button
                 variant="outline"
                 size="sm"
@@ -319,10 +318,11 @@ export default function ConstraintsManagement() {
               >
                 <Menu className="h-4 w-4" />
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-purple-900">Constraints Management</h1>
-                <p className="text-sm text-gray-600">Configure hard and soft constraints for intelligent timetable generation</p>
-              </div>
+              <PortalHeaderBrand
+                title="Constraints Management"
+                subtitle="Configure hard and soft constraints for intelligent timetable generation"
+                titleClassName="text-2xl font-bold text-purple-900"
+              />
             </div>
 
             <div className="flex items-center gap-4">

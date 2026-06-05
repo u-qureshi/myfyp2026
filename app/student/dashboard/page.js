@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -8,47 +8,175 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { toast, Toaster } from 'sonner'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from 'sonner'
 import {
-  LogOut, Calendar, Bell, User, Menu, X, Download, Clock,
-  MapPin, Users, BookOpen, AlertCircle, CheckCircle, Info, Zap,
-  ArrowRight, Star
+  flattenSectionSchedule,
+  getScheduleForSection,
+  getSectionsFromTimetableData,
+  STANDARD_TIMETABLE_TIME_SLOTS
+} from '@/lib/timetable-helpers'
+import { StudentPortalShell } from '@/components/student/StudentPortalShell'
+import { studentTheme } from '@/components/student/student-theme'
+import { BrandLoadingScreen } from '@/components/BrandLogo'
+import {
+  Calendar, Bell, Download, Clock,
+  MapPin, Users, AlertCircle, CheckCircle, Info, Zap,
+  Star, Settings2
 } from 'lucide-react'
+
+const PAGE_META = {
+  dashboard: { title: 'Dashboard', subtitle: 'Academic overview & quick actions', crumbs: ['Home', 'Dashboard'] },
+  timetable: { title: 'My Timetable', subtitle: 'Weekly class schedule', crumbs: ['Home', 'Timetable'] },
+  notifications: { title: 'Notifications', subtitle: 'Updates and announcements', crumbs: ['Home', 'Notifications'] },
+  profile: { title: 'My Profile', subtitle: 'Student record & preferences', crumbs: ['Home', 'Profile'] }
+}
 
 export default function StudentDashboard() {
   const [currentPage, setCurrentPage] = useState('dashboard')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [unreadCount, setUnreadCount] = useState(2)
+  const [unreadCount, setUnreadCount] = useState(0)
   const [notificationsState, setNotificationsState] = useState({
     email: true,
     timetable: true,
     alerts: true
   })
   const [phone, setPhone] = useState('')
-  const [notificationsData, setNotificationsData] = useState([
-    { id: 1, title: 'Timetable Generated Successfully', message: 'BSCS Semester 7 timetable with zero conflicts', time: '2 hours ago', unread: true, type: 'success' },
-    { id: 2, title: 'Room Change Alert', message: 'Database Systems moved from Room 101 to Lab 201', time: '5 hours ago', unread: true, type: 'warning' },
-    { id: 3, title: 'Faculty Availability Updated', message: 'Dr. Ahmed Khan updated availability', time: '1 day ago', unread: false, type: 'info' },
-    { id: 4, title: 'Emergency Update', message: 'Dr. Sarah Ali unavailable tomorrow, reschedule required', time: '1 day ago', unread: false, type: 'alert' },
-    { id: 5, title: 'Timetable Published', message: 'Fall 2025 timetable published to all students', time: '2 days ago', unread: false, type: 'success' }
-  ])
+  const [portalRequest, setPortalRequest] = useState(null)
+  const [portalProfile, setPortalProfile] = useState(null)
+  const [publishedPayload, setPublishedPayload] = useState(null)
+  const [selectedSectionId, setSelectedSectionId] = useState(null)
+  const [notificationsData, setNotificationsData] = useState([])
+  const [hasSelectedTimetable, setHasSelectedTimetable] = useState(false)
 
-  // Sample timetable data
-  const timetableData = [
-    { day: 'Monday', time: '09:00-10:00', subject: 'Data Structures', room: 'Room 101', teacher: 'Dr. Ahmed', block: 'A' },
-    { day: 'Monday', time: '10:00-11:00', subject: 'Data Structures', room: 'Room 101', teacher: 'Dr. Ahmed', block: 'A' },
-    { day: 'Tuesday', time: '09:00-10:00', subject: 'AI & ML', room: 'Room 401', teacher: 'Dr. Shah', block: 'C' },
-    { day: 'Thursday', time: '10:00-11:00', subject: 'Database Systems', room: 'Room 205', teacher: 'Ms. Ali', block: 'B' },
-    { day: 'Friday', time: '11:00-12:00', subject: 'Software Engineering', room: 'Room 102', teacher: 'Mr. Ahmed', block: 'A' }
-  ]
+  const availableSections = useMemo(
+    () => getSectionsFromTimetableData(publishedPayload?.timetableData || publishedPayload),
+    [publishedPayload]
+  )
 
-  // Sample announcements
-  const announcements = [
-    { id: 1, title: 'Timetable Updated', message: 'Room change for Database Systems - Now in Lab 201', time: '2 hours ago', type: 'warning' },
-    { id: 2, title: 'Class Rescheduled', message: 'AI & ML class moved to 2:00 PM', time: '1 day ago', type: 'info' }
-  ]
+  const mySectionSchedule = useMemo(() => {
+    const timetableData = publishedPayload?.timetableData || publishedPayload
+    if (!timetableData || !selectedSectionId) return null
+    return getScheduleForSection(timetableData, selectedSectionId)
+  }, [publishedPayload, selectedSectionId])
+
+  const myClasses = useMemo(
+    () => flattenSectionSchedule(mySectionSchedule),
+    [mySectionSchedule]
+  )
+
+  const selectedSection = availableSections.find(
+    (section) => String(section.id) === String(selectedSectionId)
+  )
+
+  const nextClass = myClasses[0] || null
+
+  const uniqueCourses = useMemo(
+    () => new Set(myClasses.map((item) => item.courseName).filter(Boolean)).size,
+    [myClasses]
+  )
+
+  const todayName = useMemo(
+    () => new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+    []
+  )
+
+  const classesToday = useMemo(
+    () => myClasses.filter((item) => item.day === todayName),
+    [myClasses, todayName]
+  )
+
+  const portalAnnouncements = useMemo(
+    () => notificationsData.filter((n) => n.unread).slice(0, 3),
+    [notificationsData]
+  )
+
+  const loadPortalData = () => {
+    fetch('/api/student/profile', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        setPortalProfile(data.profile)
+        if (!data.profile?.profileComplete) {
+          window.location.href = '/student/onboarding'
+        }
+      })
+      .catch(() => {})
+
+    fetch('/api/student/timetable-options', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        setPortalRequest(data.request)
+        if (data.selected?.timetable) {
+          setHasSelectedTimetable(true)
+          setPublishedPayload({ timetableData: data.selected.timetable })
+        } else {
+          setHasSelectedTimetable(false)
+          setPublishedPayload(null)
+        }
+      })
+      .catch(() => {})
+
+    fetch('/api/student/notifications', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setNotificationsData(data.notifications || [])
+          setUnreadCount(data.unreadCount || 0)
+        }
+      })
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    if (!user) return
+    loadPortalData()
+  }, [user])
+
+  useEffect(() => {
+    if (!availableSections.length) return
+
+    const savedSectionId = localStorage.getItem('studentSectionId')
+    if (savedSectionId && availableSections.some((section) => String(section.id) === savedSectionId)) {
+      setSelectedSectionId(savedSectionId)
+      return
+    }
+
+    const matchedByName = user?.name
+      ? availableSections.find((section) =>
+          String(section.name).toLowerCase().includes(String(user.name).toLowerCase())
+        )
+      : null
+
+    setSelectedSectionId(matchedByName?.id || availableSections[0].id)
+  }, [availableSections, user])
+
+  useEffect(() => {
+    if (selectedSectionId) {
+      localStorage.setItem('studentSectionId', String(selectedSectionId))
+    }
+  }, [selectedSectionId])
+
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash.replace('#', '')
+      if (['timetable', 'notifications', 'profile'].includes(hash)) {
+        setCurrentPage(hash)
+      }
+    }
+    applyHash()
+    window.addEventListener('hashchange', applyHash)
+    return () => window.removeEventListener('hashchange', applyHash)
+  }, [])
+
+  const goToPage = (page) => {
+    setCurrentPage(page)
+    if (page === 'dashboard') {
+      window.history.replaceState(null, '', '/student/dashboard')
+    } else {
+      window.location.hash = page
+    }
+  }
 
   // Fetch user session
   useEffect(() => {
@@ -94,12 +222,22 @@ export default function StudentDashboard() {
     toast.success('Profile updated successfully')
   }
 
-  const handleMarkAsRead = (id) => {
-    setNotificationsData(notificationsData.map(n => 
-      n.id === id ? { ...n, unread: false } : n
-    ))
+  const handleMarkAsRead = async (id) => {
+    setNotificationsData(
+      notificationsData.map((n) => (n.id === id ? { ...n, unread: false } : n))
+    )
     setUnreadCount(Math.max(0, unreadCount - 1))
-    toast.success('Marked as read')
+
+    try {
+      await fetch('/api/student/notifications', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      })
+    } catch {
+      /* portal-only notifications need no server update */
+    }
   }
 
   const getNotificationIcon = (type) => {
@@ -119,190 +257,102 @@ export default function StudentDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 to-purple-50">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-teal-600 to-purple-600 mx-auto mb-4 flex items-center justify-center">
-            <span className="text-white font-bold">SS</span>
-          </div>
-          <p className="text-gray-600">Loading your dashboard...</p>
-        </div>
-      </div>
+      <BrandLoadingScreen
+        message="Loading your portal..."
+        className={`min-h-screen ${studentTheme.page}`}
+      />
     )
   }
 
-  if (!user) {
-    return null
-  }
+  if (!user) return null
+
+  const meta = PAGE_META[currentPage] || PAGE_META.dashboard
 
   return (
-    <>
-      <Toaster />
-      <div className="min-h-screen bg-gray-50">
-        {/* Mobile Overlay */}
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        {/* Sidebar */}
-        <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-teal-600 via-purple-600 to-purple-700 text-white p-6 z-50 transition-transform duration-300 w-64 overflow-y-auto ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0`}>
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg">
-                <span className="text-teal-600 font-bold">SS</span>
-              </div>
-              <div>
-                <span className="font-bold text-sm block">SmartScheduler</span>
-                <span className="text-xs text-teal-100">Student</span>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-white hover:bg-purple-500"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <nav className="space-y-2">
-            <Button
-              variant={currentPage === 'dashboard' ? 'secondary' : 'ghost'}
-              className={`w-full justify-start font-medium ${currentPage === 'dashboard' ? 'bg-white text-teal-600 shadow-md' : 'text-white hover:bg-purple-500'}`}
-              onClick={() => {
-                setCurrentPage('dashboard')
-                setSidebarOpen(false)
-              }}
-            >
-              <Calendar className="h-4 w-4 mr-3" />
-              Dashboard
-            </Button>
-            <Button
-              variant={currentPage === 'timetable' ? 'secondary' : 'ghost'}
-              className={`w-full justify-start font-medium ${currentPage === 'timetable' ? 'bg-white text-teal-600 shadow-md' : 'text-white hover:bg-purple-500'}`}
-              onClick={() => {
-                setCurrentPage('timetable')
-                setSidebarOpen(false)
-              }}
-            >
-              <Calendar className="h-4 w-4 mr-3" />
-              My Timetable
-            </Button>
-            <Button
-              variant={currentPage === 'notifications' ? 'secondary' : 'ghost'}
-              className={`w-full justify-start font-medium ${currentPage === 'notifications' ? 'bg-white text-teal-600 shadow-md' : 'text-white hover:bg-purple-500'}`}
-              onClick={() => {
-                setCurrentPage('notifications')
-                setSidebarOpen(false)
-              }}
-            >
-              <Bell className="h-4 w-4 mr-3" />
-              Notifications
-              {unreadCount > 0 && (
-                <span className="ml-auto bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold">
-                  {unreadCount}
-                </span>
-              )}
-            </Button>
-            <Button
-              variant={currentPage === 'profile' ? 'secondary' : 'ghost'}
-              className={`w-full justify-start font-medium ${currentPage === 'profile' ? 'bg-white text-teal-600 shadow-md' : 'text-white hover:bg-purple-500'}`}
-              onClick={() => {
-                setCurrentPage('profile')
-                setSidebarOpen(false)
-              }}
-            >
-              <User className="h-4 w-4 mr-3" />
-              Profile
-            </Button>
-          </nav>
-
-          <div className="mt-auto pt-8 border-t border-purple-400">
-            <Button
-              onClick={handleLogout}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-medium"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'ml-0'}`}>
-          {/* Top Navbar */}
-          <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-            <div className="flex items-center justify-between px-4 py-4">
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="lg:hidden"
-                >
-                  <Menu className="h-5 w-5" />
-                </Button>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-teal-600 to-purple-600 bg-clip-text text-transparent">Student Portal</h1>
-                  <p className="text-sm text-gray-500">SmartScheduler</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right hidden sm:block">
-                  <p className="text-sm font-semibold text-gray-900">{user.name}</p>
-                  <p className="text-xs text-gray-500">{user.email}</p>
-                </div>
-                <Button
-                  onClick={handleLogout}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-200 text-red-600 hover:bg-red-50"
-                >
-                  <LogOut className="h-4 w-4 mr-1" />
-                  Logout
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Dashboard Page */}
+    <StudentPortalShell
+      user={user}
+      loading={false}
+      activeNav={currentPage}
+      unreadCount={unreadCount}
+      onLogout={handleLogout}
+      title={meta.title}
+      subtitle={meta.subtitle}
+      breadcrumbs={meta.crumbs}
+    >
           {currentPage === 'dashboard' && (
-            <div className="p-4 md:p-6 space-y-6">
-              {/* Welcome Card */}
-              <Card className="border-0 shadow-md bg-gradient-to-r from-teal-50 via-purple-50 to-purple-100 border-l-4 border-l-teal-600 overflow-hidden">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-3xl font-bold text-gray-900">Welcome, {user.name}! 👋</CardTitle>
-                      <CardDescription className="text-base mt-2">BSCS Semester 7 - Section A • Fall 2025</CardDescription>
-                    </div>
-                  </div>
+            <div className="space-y-6">
+              <Card className={`${studentTheme.card} border-l-4 border-l-[#c9a227] overflow-hidden`}>
+                <CardHeader className="bg-gradient-to-r from-[#0c1f3f] to-[#1a3a6b] text-white">
+                  <CardTitle className="font-serif text-2xl md:text-3xl font-semibold">
+                    Welcome, {user.name}
+                  </CardTitle>
+                  <CardDescription className="text-slate-300 text-base mt-2">
+                    {portalProfile?.departmentName || user.department_name || 'Department'} · Semester{' '}
+                    {portalProfile?.semester || user.semester || '—'}
+                  </CardDescription>
                 </CardHeader>
               </Card>
 
+              {!portalRequest && (
+                <Card className="border-[#c9a227]/30 bg-[#c9a227]/5">
+                  <CardContent className="pt-4 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-[#0c1f3f]">
+                      Abhi tak constraints submit nahi ki. Pehle apni preferences choose karein.
+                    </p>
+                    <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/constraints')}>
+                      Set Constraints →
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {portalRequest && (
+                <Card className="border-[#0c1f3f]/20">
+                  <CardContent className="pt-4 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm">
+                      Timetable request: <strong>{portalRequest.status}</strong>
+                    </p>
+                    {portalRequest.status === 'pending' && (
+                      <p className="text-xs text-muted-foreground">Waiting for admin approval</p>
+                    )}
+                    {portalRequest.status === 'ready' && (
+                      <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/pick-timetable')}>
+                        Pick Your Timetable →
+                      </Button>
+                    )}
+                    {portalRequest.status === 'selected' && (
+                      <Button size="sm" variant="outline" onClick={() => goToPage('timetable')}>
+                        View Saved Timetable
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Stats */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                <Card className="hover:shadow-lg transition-shadow">
+                <Card className={`${studentTheme.card} hover:shadow-md transition-shadow`}>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-gray-600">Total Courses</CardTitle>
+                    <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wide">Total Courses</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-bold bg-gradient-to-r from-teal-600 to-teal-400 bg-clip-text text-transparent">7</div>
-                    <p className="text-xs text-gray-500 mt-1">This semester</p>
+                    <div className={studentTheme.statValue}>
+                      {hasSelectedTimetable ? uniqueCourses : '—'}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {hasSelectedTimetable ? 'This semester' : 'Timetable not selected yet'}
+                    </p>
                   </CardContent>
                 </Card>
 
-                <Card className="hover:shadow-lg transition-shadow">
+                <Card className={`${studentTheme.card} hover:shadow-md transition-shadow`}>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-gray-600">Classes This Week</CardTitle>
+                    <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wide">Classes This Week</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent">28</div>
+                    <div className={studentTheme.statValue}>
+                      {hasSelectedTimetable ? myClasses.length : '—'}
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Total classes</p>
                   </CardContent>
                 </Card>
@@ -312,8 +362,10 @@ export default function StudentDashboard() {
                     <CardTitle className="text-sm font-medium text-gray-600">Classes Today</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">6</div>
-                    <p className="text-xs text-gray-500 mt-1">Upcoming</p>
+                    <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
+                      {hasSelectedTimetable ? classesToday.length : '—'}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{todayName}</p>
                   </CardContent>
                 </Card>
 
@@ -322,7 +374,9 @@ export default function StudentDashboard() {
                     <CardTitle className="text-sm font-medium text-gray-600">Notifications</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-orange-400 bg-clip-text text-transparent">3</div>
+                    <div className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-orange-400 bg-clip-text text-transparent">
+                      {unreadCount}
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Unread</p>
                   </CardContent>
                 </Card>
@@ -333,14 +387,14 @@ export default function StudentDashboard() {
                 {/* Weekly Timetable */}
                 <div className="lg:col-span-2">
                   <Card className="shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-teal-50 to-purple-50 border-b">
+                    <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-[#0c1f3f]/5 to-[#c9a227]/5 border-b">
                       <div>
                         <CardTitle>My Timetable</CardTitle>
                         <CardDescription>Your weekly schedule</CardDescription>
                       </div>
                       <Button
                         size="sm"
-                        className="bg-teal-600 hover:bg-teal-700 text-white"
+                        className="bg-[#0c1f3f] hover:bg-[#152d57] text-white"
                         onClick={handleDownloadTimetable}
                       >
                         <Download className="h-4 w-4 mr-2" />
@@ -349,25 +403,47 @@ export default function StudentDashboard() {
                     </CardHeader>
                     <CardContent className="pt-4">
                       <div className="space-y-2">
-                        {timetableData.map((item, idx) => (
-                          <div key={idx} className="flex items-start justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200 hover:border-teal-300 hover:shadow-md transition">
+                        {myClasses.length > 0 ? myClasses.map((item, idx) => (
+                          <div key={idx} className="flex items-start justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200 hover:border-[#c9a227]/40 hover:shadow-md transition">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <Badge className="bg-teal-100 text-teal-800 font-medium">{item.day}</Badge>
-                                <span className="text-sm font-medium text-gray-900">{item.time}</span>
+                                <Badge className="bg-[#c9a227]/15 text-[#0c1f3f] border-[#c9a227]/30 font-medium">{item.day}</Badge>
+                                <span className="text-sm font-medium text-gray-900">{item.timeSlot}</span>
                               </div>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{item.subject}</p>
+                              <p className="text-sm font-semibold text-gray-900 mt-1">{item.courseName}</p>
                               <div className="flex items-center gap-4 text-xs text-gray-600 mt-1">
                                 <span className="flex items-center gap-1">
-                                  <MapPin className="h-3 w-3 text-teal-600" /> {item.room}
+                                  <MapPin className="h-3 w-3 text-[#0c1f3f]" /> {item.room}
                                 </span>
                                 <span className="flex items-center gap-1">
-                                  <Users className="h-3 w-3 text-purple-600" /> {item.teacher}
+                                  <Users className="h-3 w-3 text-purple-600" /> {item.faculty}
                                 </span>
                               </div>
                             </div>
                           </div>
-                        ))}
+                        )) : (
+                          <div className="text-center py-8 space-y-3">
+                            <p className="text-sm text-gray-500">
+                              {!portalRequest
+                                ? 'Pehle constraints submit karein, phir admin approve karega.'
+                                : portalRequest.status === 'pending'
+                                  ? 'Admin approval ka wait ho raha hai.'
+                                  : portalRequest.status === 'ready'
+                                    ? 'Top 5 options ready hain — ab timetable choose karein.'
+                                    : 'Abhi koi timetable save nahi hui.'}
+                            </p>
+                            {!portalRequest && (
+                              <Button size="sm" variant="outline" onClick={() => (window.location.href = '/student/constraints')}>
+                                Go to Constraints
+                              </Button>
+                            )}
+                            {portalRequest?.status === 'ready' && (
+                              <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/pick-timetable')}>
+                                Pick Timetable
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -380,14 +456,14 @@ export default function StudentDashboard() {
                       <CardTitle className="text-lg">Announcements</CardTitle>
                     </CardHeader>
                     <CardContent className="pt-4 space-y-3">
-                      {announcements.length > 0 ? announcements.map((ann) => (
+                      {portalAnnouncements.length > 0 ? portalAnnouncements.map((ann) => (
                         <div key={ann.id} className="p-3 border-l-4 border-yellow-400 bg-yellow-50 rounded hover:bg-yellow-100 transition">
                           <p className="text-sm font-semibold text-gray-900">{ann.title}</p>
                           <p className="text-xs text-gray-600 mt-1">{ann.message}</p>
                           <p className="text-xs text-gray-400 mt-2">{ann.time}</p>
                         </div>
                       )) : (
-                        <p className="text-sm text-gray-500 text-center py-4">No announcements</p>
+                        <p className="text-sm text-gray-500 text-center py-4">No new updates</p>
                       )}
                     </CardContent>
                   </Card>
@@ -398,76 +474,161 @@ export default function StudentDashboard() {
 
           {/* My Timetable Page */}
           {currentPage === 'timetable' && (
-            <div className="p-4 md:p-6 space-y-6">
-              <div>
-                <h2 className="text-3xl font-bold text-gray-900">My Timetable</h2>
-                <p className="text-gray-500">Your complete weekly schedule</p>
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <p className="text-sm text-slate-500">
+                  {selectedSection
+                    ? `${selectedSection.name} · ${myClasses.length} classes this week`
+                    : 'Your complete weekly schedule'}
+                </p>
+                {availableSections.length > 1 && (
+                  <Select value={String(selectedSectionId || '')} onValueChange={setSelectedSectionId}>
+                    <SelectTrigger className="w-full md:w-56">
+                      <SelectValue placeholder="Select your section" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableSections.map((section) => (
+                        <SelectItem key={section.id} value={String(section.id)}>
+                          {section.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
-              {/* Next Class */}
-              <Card className="border-l-4 border-l-teal-600 bg-gradient-to-r from-teal-50 to-purple-50 shadow-md">
+              {!hasSelectedTimetable && (
+                <Card className="border-yellow-200 bg-yellow-50">
+                  <CardContent className="py-4 text-sm text-yellow-900 space-y-3">
+                    <p>
+                      {!portalRequest
+                        ? 'Abhi koi timetable nahi. Pehle constraints submit karein.'
+                        : portalRequest.status === 'pending'
+                          ? 'Admin ne abhi approve nahi kiya. Options generate hone ka wait karein.'
+                          : portalRequest.status === 'ready'
+                            ? 'Admin ne options generate kar di hain. Ab apni pasand ki timetable choose karein.'
+                            : 'Aapki saved timetable yahan show hogi jab admin process complete ho jaye.'}
+                    </p>
+                    {portalRequest?.status === 'ready' && (
+                      <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/pick-timetable')}>
+                        Pick Timetable
+                      </Button>
+                    )}
+                    {!portalRequest && (
+                      <Button size="sm" variant="outline" onClick={() => (window.location.href = '/student/constraints')}>
+                        Set Constraints
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {hasSelectedTimetable && nextClass && (
+              <Card className="border-l-4 border-l-teal-600 bg-gradient-to-r from-[#0c1f3f]/5 to-[#c9a227]/5 shadow-md">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                    Next Class
+                    Upcoming Class
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     <div>
-                      <p className="text-3xl font-bold text-gray-900">Object Oriented Programming</p>
+                      <p className="text-3xl font-bold text-gray-900">{nextClass.courseName}</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                      <div className="p-3 bg-white rounded-lg border border-teal-200">
+                      <div className="p-3 bg-white rounded-lg border border-[#0c1f3f]/20">
                         <p className="text-gray-500 text-xs font-medium">Time</p>
                         <p className="font-bold text-gray-900 mt-1 flex items-center gap-1">
-                          <Clock className="h-4 w-4 text-teal-600" /> 8:00 - 9:00 AM
+                          <Clock className="h-4 w-4 text-[#0c1f3f]" /> {nextClass.day} · {nextClass.timeSlot}
                         </p>
                       </div>
-                      <div className="p-3 bg-white rounded-lg border border-teal-200">
+                      <div className="p-3 bg-white rounded-lg border border-[#0c1f3f]/20">
                         <p className="text-gray-500 text-xs font-medium">Room</p>
                         <p className="font-bold text-gray-900 mt-1 flex items-center gap-1">
-                          <MapPin className="h-4 w-4 text-teal-600" /> R301, Block A
+                          <MapPin className="h-4 w-4 text-[#0c1f3f]" /> {nextClass.room}
                         </p>
                       </div>
-                      <div className="p-3 bg-white rounded-lg border border-teal-200">
+                      <div className="p-3 bg-white rounded-lg border border-[#0c1f3f]/20">
                         <p className="text-gray-500 text-xs font-medium">Teacher</p>
                         <p className="font-bold text-gray-900 mt-1 flex items-center gap-1">
-                          <Users className="h-4 w-4 text-teal-600" /> Dr. Muhammad Khan
+                          <Users className="h-4 w-4 text-[#0c1f3f]" /> {nextClass.faculty}
                         </p>
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
+              )}
 
-              {/* Download Button */}
               <Button
                 onClick={handleDownloadTimetable}
-                className="bg-teal-600 hover:bg-teal-700 text-white font-medium w-full sm:w-auto"
+                className="bg-[#0c1f3f] hover:bg-[#152d57] text-white font-medium w-full sm:w-auto"
+                disabled={!myClasses.length}
               >
                 <Download className="h-4 w-4 mr-2" />
                 Download Full Timetable
               </Button>
 
-              {/* Weekly Schedule */}
               <Card className="shadow-md">
-                <CardHeader className="bg-gradient-to-r from-teal-50 to-purple-50 border-b">
+                <CardHeader className="bg-gradient-to-r from-[#0c1f3f]/5 to-[#c9a227]/5 border-b">
                   <CardTitle>Weekly Schedule</CardTitle>
-                  <CardDescription>All your classes for the week</CardDescription>
+                  <CardDescription>Sirf aapki section ki classes</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {mySectionSchedule ? (
+                    <>
+                      <div className="grid grid-cols-6 border-b bg-gray-50">
+                        <div className="p-3 font-medium text-sm">Time</div>
+                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
+                          <div key={day} className="p-3 font-medium text-sm border-l">{day.slice(0, 3)}</div>
+                        ))}
+                      </div>
+                      {STANDARD_TIMETABLE_TIME_SLOTS.map((timeSlot) => (
+                        <div key={timeSlot.label} className="grid grid-cols-6 border-b">
+                          <div className="p-3 text-xs font-medium bg-gray-50">{timeSlot.label}</div>
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => {
+                            const entry = mySectionSchedule?.[day]?.[timeSlot.label]?.[0]
+                            return (
+                              <div key={day} className="p-2 border-l min-h-16">
+                                {entry && (
+                                  <div className="p-2 rounded text-xs bg-[#c9a227]/10 border border-[#c9a227]/20">
+                                    <p className="font-semibold text-[#0c1f3f]">{entry.courseName}</p>
+                                    <p className="mt-1">{entry.faculty}</p>
+                                    <p className="text-muted-foreground">{entry.room}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="p-8 text-center text-gray-500">
+                      No classes found for your section yet.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {myClasses.length > 0 && (
+              <Card className="shadow-md">
+                <CardHeader className="border-b">
+                  <CardTitle>Class List</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="space-y-2">
-                    {timetableData.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-teal-50 hover:border-teal-300 transition">
+                    {myClasses.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-[#c9a227]/5 hover:border-[#c9a227]/40 transition">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 flex-wrap">
-                            <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 font-medium">
+                            <Badge variant="outline" className="bg-[#c9a227]/10 text-[#0c1f3f] border-[#c9a227]/30 font-medium">
                               {item.day}
                             </Badge>
-                            <span className="font-semibold text-gray-900">{item.time}</span>
+                            <span className="font-semibold text-gray-900">{item.timeSlot}</span>
                             <span className="text-gray-600">-</span>
-                            <span className="font-semibold text-gray-900">{item.subject}</span>
+                            <span className="font-semibold text-gray-900">{item.courseName}</span>
                           </div>
                           <div className="flex items-center gap-4 text-sm text-gray-600 mt-2 ml-0 md:ml-24">
                             <span className="flex items-center gap-1">
@@ -475,7 +636,7 @@ export default function StudentDashboard() {
                             </span>
                             <span>•</span>
                             <span className="flex items-center gap-1">
-                              <Users className="h-3 w-3" /> {item.teacher}
+                              <Users className="h-3 w-3" /> {item.faculty}
                             </span>
                           </div>
                         </div>
@@ -484,19 +645,15 @@ export default function StudentDashboard() {
                   </div>
                 </CardContent>
               </Card>
+              )}
             </div>
           )}
 
           {/* Notifications Page */}
           {currentPage === 'notifications' && (
-            <div className="p-4 md:p-6 space-y-6">
-              <div>
-                <h2 className="text-3xl font-bold text-gray-900">Notifications</h2>
-                <p className="text-gray-500">Stay updated with important announcements</p>
-              </div>
-
-              <Card className="shadow-md">
-                <CardHeader className="bg-gradient-to-r from-teal-50 to-purple-50 border-b">
+            <div className="space-y-6">
+              <Card className={`${studentTheme.card} shadow-md`}>
+                <CardHeader className="bg-gradient-to-r from-[#0c1f3f]/5 to-[#c9a227]/5 border-b">
                   <Tabs defaultValue="all" className="w-full">
                     <TabsList className="w-full justify-start bg-white">
                       <TabsTrigger value="all" className="font-medium">All</TabsTrigger>
@@ -589,14 +746,9 @@ export default function StudentDashboard() {
 
           {/* Profile Page */}
           {currentPage === 'profile' && (
-            <div className="p-4 md:p-6 space-y-6 max-w-2xl">
-              <div>
-                <h2 className="text-3xl font-bold text-gray-900">My Profile</h2>
-                <p className="text-gray-500">Manage your student information and preferences</p>
-              </div>
-
-              <Card className="shadow-md">
-                <CardHeader className="bg-gradient-to-r from-teal-50 to-purple-50 border-b">
+            <div className="space-y-6 max-w-2xl">
+              <Card className={studentTheme.card}>
+                <CardHeader className="bg-gradient-to-r from-[#0c1f3f]/5 to-[#c9a227]/5 border-b">
                   <CardTitle>Student Information</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-6 space-y-6">
@@ -613,22 +765,42 @@ export default function StudentDashboard() {
 
                     <div className="space-y-2">
                       <Label htmlFor="studentId" className="font-semibold">Student ID</Label>
-                      <Input id="studentId" value="STD-2024-CS-142" disabled className="bg-gray-50 border-gray-300" />
+                      <Input
+                        id="studentId"
+                        value={user.id ? user.id.slice(0, 8).toUpperCase() : '—'}
+                        disabled
+                        className="bg-gray-50 border-gray-300"
+                      />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="department" className="font-semibold">Department</Label>
-                      <Input id="department" value="Computer Science" disabled className="bg-gray-50 border-gray-300" />
+                      <Input
+                        id="department"
+                        value={portalProfile?.departmentName || user.department_name || '—'}
+                        disabled
+                        className="bg-gray-50 border-gray-300"
+                      />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="semester" className="font-semibold">Semester</Label>
-                      <Input id="semester" value="BSCS Semester 7" disabled className="bg-gray-50 border-gray-300" />
+                      <Input
+                        id="semester"
+                        value={portalProfile?.semester ? `Semester ${portalProfile.semester}` : '—'}
+                        disabled
+                        className="bg-gray-50 border-gray-300"
+                      />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="section" className="font-semibold">Section</Label>
-                      <Input id="section" value="A" disabled className="bg-gray-50 border-gray-300" />
+                      <Input
+                        id="section"
+                        value={selectedSection?.name || '—'}
+                        disabled
+                        className="bg-gray-50 border-gray-300"
+                      />
                     </div>
                   </div>
 
@@ -646,9 +818,9 @@ export default function StudentDashboard() {
               </Card>
 
               {/* Notification Preferences */}
-              <Card className="shadow-md">
-                <CardHeader className="bg-gradient-to-r from-blue-50 to-teal-50 border-b">
-                  <CardTitle>Notification Preferences</CardTitle>
+              <Card className={studentTheme.card}>
+                <CardHeader className={`${studentTheme.cardHeader}`}>
+                  <CardTitle className="font-serif text-[#0c1f3f]">Notification Preferences</CardTitle>
                   <CardDescription>Choose how you want to be notified</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 space-y-4">
@@ -689,15 +861,13 @@ export default function StudentDashboard() {
 
               <Button
                 onClick={handleSaveProfile}
-                className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-6"
+                className={`w-full py-6 font-semibold ${studentTheme.primaryBtn}`}
               >
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Save Profile
               </Button>
             </div>
           )}
-        </div>
-      </div>
-    </>
+    </StudentPortalShell>
   )
 }

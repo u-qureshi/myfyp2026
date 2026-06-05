@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
+import { csSubjects } from '@/lib/cs-curriculum'
 import { departments, rooms, subjects, faculty, sections } from '@/lib/seed-data'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(req) {
   try {
@@ -93,6 +96,23 @@ export async function GET(req) {
 
     // Step 3: Insert subjects (using department ID map)
     console.log('📖 Inserting subjects...')
+
+    const realCsCodes = new Set(csSubjects.map((subject) => subject.code))
+    const csDeptId = deptMap.CS
+    if (csDeptId) {
+      const { data: oldCsSubjects } = await supabase
+        .from('subjects')
+        .select('id, code')
+        .eq('department_id', csDeptId)
+
+      for (const oldSubject of oldCsSubjects || []) {
+        if (!realCsCodes.has(oldSubject.code)) {
+          await supabase.from('subjects').delete().eq('id', oldSubject.id)
+          console.log(`  🗑️  Removed outdated CS subject ${oldSubject.code}`)
+        }
+      }
+    }
+
     for (const subject of subjects) {
       try {
         const deptId = deptMap[subject.dept]
@@ -101,7 +121,13 @@ export async function GET(req) {
           continue
         }
 
-        // Upsert by code
+        const payload = {
+          name: subject.name,
+          code: subject.code,
+          credit_hours: subject.credit_hours,
+          department_id: deptId
+        }
+
         const { data: existing } = await supabase
           .from('subjects')
           .select('id')
@@ -109,19 +135,11 @@ export async function GET(req) {
           .single()
 
         if (existing?.id) {
-          console.log(`  ⏭️  Skipped subject ${subject.code} (already exists)`)
+          const { error } = await supabase.from('subjects').update(payload).eq('id', existing.id)
+          if (error) throw error
+          console.log(`  🔄 Updated subject ${subject.code}`)
         } else {
-          const { error } = await supabase
-            .from('subjects')
-            .insert([
-              {
-                name: subject.name,
-                code: subject.code,
-                credit_hours: subject.credit_hours,
-                department_id: deptId
-              }
-            ])
-
+          const { error } = await supabase.from('subjects').insert([payload])
           if (error) throw error
           inserted.subjects++
           console.log(`  ✅ Inserted subject ${subject.code}`)
@@ -133,6 +151,8 @@ export async function GET(req) {
 
     // Step 4: Insert faculty users
     console.log('👨‍🏫 Inserting faculty users...')
+    const facultyPasswordHash = await bcrypt.hash('faculty', 10)
+
     for (const facMember of faculty) {
       try {
         const deptId = deptMap[facMember.dept]
@@ -141,24 +161,13 @@ export async function GET(req) {
           continue
         }
 
-        // Hash password using bcryptjs
-        let hashedPassword
-        try {
-          hashedPassword = await bcrypt.hash(facMember.password, 10)
-          console.log(`  🔐 Hashed password for ${facMember.email}`)
-        } catch (hashError) {
-          console.error(`  ❌ Failed to hash password for ${facMember.email}:`, hashError.message)
-          continue
-        }
-
-        // Upsert faculty user (handle duplicates gracefully)
         const { data, error } = await supabase
           .from('users')
           .upsert(
             [
               {
                 email: facMember.email,
-                password_hash: hashedPassword,
+                password_hash: facultyPasswordHash,
                 role: 'faculty',
                 name: facMember.name,
                 department_id: deptId
@@ -180,9 +189,7 @@ export async function GET(req) {
 
         if (data && data.length > 0) {
           inserted.faculty++
-          console.log(`  ✅ Inserted faculty ${facMember.name} (${facMember.email}) - ID: ${data[0].id}`)
-        } else {
-          console.log(`  ⏭️  Skipped faculty ${facMember.email} (already exists)`)
+          console.log(`  ✅ Upserted faculty ${facMember.name}`)
         }
       } catch (error) {
         console.error(`  🔥 Fatal error inserting faculty ${facMember.email}:`, {
@@ -203,7 +210,13 @@ export async function GET(req) {
           continue
         }
 
-        // Upsert by name
+        const payload = {
+          name: section.name,
+          semester: section.semester,
+          department_id: deptId,
+          student_count: section.student_count
+        }
+
         const { data: existing } = await supabase
           .from('sections')
           .select('id')
@@ -211,19 +224,11 @@ export async function GET(req) {
           .single()
 
         if (existing?.id) {
-          console.log(`  ⏭️  Skipped section ${section.name} (already exists)`)
+          const { error } = await supabase.from('sections').update(payload).eq('id', existing.id)
+          if (error) throw error
+          console.log(`  🔄 Updated section ${section.name}`)
         } else {
-          const { error } = await supabase
-            .from('sections')
-            .insert([
-              {
-                name: section.name,
-                semester: section.semester,
-                department_id: deptId,
-                student_count: section.student_count
-              }
-            ])
-
+          const { error } = await supabase.from('sections').insert([payload])
           if (error) throw error
           inserted.sections++
           console.log(`  ✅ Inserted section ${section.name}`)

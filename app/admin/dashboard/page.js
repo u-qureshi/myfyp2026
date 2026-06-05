@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Upload, Brain, Calendar, Settings, Users, BookOpen, Building2, FileSpreadsheet, Menu, X, Download, Pencil, Trash2, Plus, LogOut, Share2, DoorOpen, LayoutGrid, Settings2, AlertTriangle, BarChart2 } from 'lucide-react'
+import { BrandLogo } from '@/components/BrandLogo'
+import { AdminSidebar } from '@/components/admin/AdminSidebar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useDropzone } from 'react-dropzone'
 import { toast, Toaster } from 'sonner'
@@ -16,6 +19,21 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
+import {
+  applySemesterCreditRules,
+  buildConstraintScenarios,
+  countConstraintScenarios,
+  filterSubjectsByDeptAndSemester,
+  flattenSectionSchedule,
+  getCsSchedulingSubjects,
+  getCsSemesterDisplaySummary,
+  getScheduleForSection,
+  getSectionsFromTimetableData,
+  mapFacultyForGenerator,
+  mapSectionsForGenerator,
+  mergeSavedConstraints,
+  STANDARD_TIMETABLE_TIME_SLOTS
+} from '@/lib/timetable-helpers'
 
 export default function AdminDashboard() {
   const [currentPage, setCurrentPage] = useState('dashboard')
@@ -27,7 +45,11 @@ export default function AdminDashboard() {
     rooms: null
   })
   const [timetableData, setTimetableData] = useState(null)
+  const [timetableScenarios, setTimetableScenarios] = useState([])
+  const [selectedScenarioId, setSelectedScenarioId] = useState(null)
+  const [selectedViewSectionId, setSelectedViewSectionId] = useState(null)
   const [generationProgress, setGenerationProgress] = useState(0)
+  const [generationStatus, setGenerationStatus] = useState('')
   const [constraints, setConstraints] = useState({
     preventFacultyClashes: true,
     ensureRoomCapacity: true,
@@ -47,6 +69,15 @@ export default function AdminDashboard() {
     gapsWeight: 75
   })
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const page = searchParams.get('page')
+    const valid = ['dashboard', 'data-management', 'generate', 'view-timetable', 'settings']
+    if (page && valid.includes(page)) {
+      setCurrentPage(page)
+    }
+  }, [searchParams])
   const [metrics, setMetrics] = useState({ students: null, faculty: null, rooms: null })
   const [dataByType, setDataByType] = useState({ 
     students: [
@@ -79,6 +110,16 @@ export default function AdminDashboard() {
   const [realDepartments, setRealDepartments] = useState([])
   const [selectedDept, setSelectedDept] = useState('all')
   const [selectedSemester, setSelectedSemester] = useState('all')
+
+  // Load saved constraints from Constraints page
+  useEffect(() => {
+    setConstraints((prev) => mergeSavedConstraints(prev))
+  }, [])
+
+  const scenarioCount = useMemo(
+    () => countConstraintScenarios(constraints),
+    [constraints]
+  )
 
   // Load real data on component mount
   useEffect(() => {
@@ -237,6 +278,18 @@ export default function AdminDashboard() {
     }
   }, [currentPage])
 
+  useEffect(() => {
+    if (!timetableData) return
+    const sections = getSectionsFromTimetableData(timetableData)
+    if (!sections.length) return
+    setSelectedViewSectionId((current) => {
+      if (current && sections.some((section) => String(section.id) === String(current))) {
+        return current
+      }
+      return sections[0].id
+    })
+  }, [timetableData])
+
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' })
     window.location.href = '/login'
@@ -280,61 +333,103 @@ export default function AdminDashboard() {
 
   const generateTimetable = async () => {
     try {
-      // Fetch real data from Supabase APIs
-      console.log('Fetching real data from Supabase...')
-      console.log('Filters: department =', selectedDept, 'semester =', selectedSemester)
-      
-      const facultyRes = await fetch('/api/admin/faculty')
-      const facultyJson = await facultyRes.json()
-      let facultyData = facultyJson.faculty || facultyJson || []
-      
-      const roomsRes = await fetch('/api/admin/rooms')
-      const roomsJson = await roomsRes.json()
-      const roomsData = roomsJson.rooms || roomsJson || []
-      
-      const sectionsRes = await fetch('/api/admin/sections')
-      const sectionsJson = await sectionsRes.json()
-      let sectionsData = sectionsJson.sections || sectionsJson || []
-      
-      console.log('Raw API data before filtering:', { faculty: facultyData.length, rooms: roomsData.length, sections: sectionsData.length })
-
-      // Filter by department if selected
-      if (selectedDept && selectedDept !== 'all') {
-        console.log('Filtering by department:', selectedDept)
-        facultyData = facultyData.filter(f => f.department_id === selectedDept)
-        sectionsData = sectionsData.filter(s => s.department_id === selectedDept)
-        console.log('After department filter:', { faculty: facultyData.length, sections: sectionsData.length })
+      if (!selectedDept || selectedDept === 'all') {
+        toast.error('Please select a specific department before generating.')
+        return
       }
-
-      // Debug logging after filtering
-      console.log('Selected dept:', selectedDept)
-      console.log('Selected semester:', selectedSemester)
-      console.log('Faculty after filter:', facultyData.length, facultyData.map(f => f.name))
-      console.log('Sections after filter:', sectionsData.length, sectionsData.map(s => s.name + ' sem:' + s.semester))
-      console.log('Rooms:', roomsData.length)
-
-      // Filter by semester if selected
-      if (selectedSemester && selectedSemester !== 'all') {
-        console.log('Filtering by semester:', selectedSemester)
-        const semNum = parseInt(selectedSemester)
-        sectionsData = sectionsData.filter(s => s.semester === semNum)
-        console.log('After semester filter:', sectionsData.length, 'sections')
-      }
-
-      if (!facultyData.length || !roomsData.length || !sectionsData.length) {
-        toast.error('No data found for selected filters. Please check your department/semester selection.')
+      if (!selectedSemester || selectedSemester === 'all') {
+        toast.error('Please select a specific semester before generating.')
         return
       }
 
-      // Map Supabase data to expected format for timetable generator
-      const mappedFaculty = facultyData.map(f => ({
-        id: f.id,
-        'Faculty ID': f.id,
-        Name: f.name || f.full_name || 'Unknown Faculty',
-        Subjects: f.department_name || f.specialization || 'General',
-        'Max Hours': String(f.max_hours || 18),
-        Availability: 'Mon-Fri 9am-5pm'
-      }))
+      console.log('Fetching real data from Supabase...')
+      console.log('Filters: department =', selectedDept, 'semester =', selectedSemester)
+      
+      const [facultyRes, roomsRes, sectionsRes, subjectsRes] = await Promise.all([
+        fetch('/api/admin/faculty'),
+        fetch('/api/admin/rooms'),
+        fetch('/api/admin/sections'),
+        fetch('/api/admin/subjects')
+      ])
+
+      const facultyJson = await facultyRes.json()
+      const roomsJson = await roomsRes.json()
+      const sectionsJson = await sectionsRes.json()
+      const subjectsJson = await subjectsRes.json()
+
+      let facultyData = facultyJson.faculty || facultyJson || []
+      const roomsData = roomsJson.rooms || roomsJson || []
+      let sectionsData = sectionsJson.sections || sectionsJson || []
+      const allSubjects = subjectsJson.subjects || subjectsJson || []
+
+      facultyData = facultyData.filter((f) => f.department_id === selectedDept)
+      sectionsData = sectionsData.filter(
+        (s) => s.department_id === selectedDept && s.semester === parseInt(selectedSemester, 10)
+      )
+
+      const deptSemesterSubjects = filterSubjectsByDeptAndSemester(
+        allSubjects,
+        selectedDept,
+        selectedSemester
+      )
+
+      const selectedDepartment = realDepartments.find((d) => d.id === selectedDept)
+      const departmentName =
+        selectedDepartment?.name ||
+        sectionsData[0]?.department_name ||
+        'Selected Department'
+      const deptCode = selectedDepartment?.code
+
+      let filteredSubjects
+      let totalCredits
+      let subjectCount
+      let courseUnits
+
+      if (deptCode === 'CS') {
+        filteredSubjects = getCsSchedulingSubjects(allSubjects, selectedSemester, sectionsData)
+        const csSummary = getCsSemesterDisplaySummary(selectedSemester, 1)
+        courseUnits = csSummary.courseUnits
+        subjectCount = csSummary.subjectCount
+        totalCredits = csSummary.totalCredits
+
+        toast.info(
+          parseInt(selectedSemester, 10) >= 5
+            ? `CS semester plan: ${courseUnits} courses/section (3 compulsory + 1 uni elective + 1 CS elective), ${totalCredits}/18 credits`
+            : `CS semester plan: ${courseUnits} compulsory courses/section, ${totalCredits}/18 credits`
+        )
+      } else {
+        const creditResult = applySemesterCreditRules(deptSemesterSubjects)
+        filteredSubjects = creditResult.subjects
+        totalCredits = creditResult.totalCredits
+        subjectCount = creditResult.subjects.length
+        courseUnits = creditResult.courseUnits
+
+        if (creditResult.droppedCount > 0) {
+          toast.info(
+            `Semester limit applied: ${subjectCount} subjects (${totalCredits}/18 credits). ${creditResult.droppedCount} extra subject(s) skipped.`
+          )
+        }
+      }
+
+      console.log('Filtered data:', {
+        faculty: facultyData.length,
+        sections: sectionsData.length,
+        subjects: filteredSubjects.length,
+        rooms: roomsData.length
+      })
+
+      if (!facultyData.length || !roomsData.length || !sectionsData.length) {
+        toast.error('No faculty, sections, or rooms found for the selected department and semester.')
+        return
+      }
+
+      if (!filteredSubjects.length) {
+        toast.error('No subjects found for the selected department and semester.')
+        return
+      }
+
+      const mappedFaculty = mapFacultyForGenerator(facultyData, filteredSubjects, selectedSemester)
+      const mappedStudents = mapSectionsForGenerator(sectionsData, allSubjects, { deptCode })
 
       const mappedRooms = roomsData.map(r => ({
         id: r.id,
@@ -345,67 +440,107 @@ export default function AdminDashboard() {
         Equipment: 'Standard'
       }))
 
-      const mappedStudents = sectionsData.map(s => ({
-        id: s.id,
-        'Student ID': s.id,
-        Name: s.name || 'Unknown Section',
-        Class: String(s.semester || '1'),
-        Section: s.name || 'A',
-        Electives: s.department_name || 'General'
-      }))
+      const activeConstraints = constraints
+      const metadata = {
+        departmentId: selectedDept,
+        departmentName,
+        departmentCode: deptCode,
+        semester: parseInt(selectedSemester, 10),
+        subjectNames: filteredSubjects.map((s) => s.name),
+        totalCredits,
+        subjectCount,
+        courseUnits,
+        sections: mappedStudents.map((section) => ({
+          id: section.id || section['Student ID'],
+          name: section.Name || section.Section || section.name
+        }))
+      }
 
       console.log('Mapped data for timetable generator:', { 
         faculty: mappedFaculty.length, 
         rooms: mappedRooms.length, 
-        sections: mappedStudents.length 
+        sections: mappedStudents.length,
+        subjects: filteredSubjects.length,
+        metadata
       })
-      console.log('Sample mapped faculty:', mappedFaculty[0])
-      console.log('Sample mapped room:', mappedRooms[0])
-      console.log('Sample mapped section:', mappedStudents[0])
 
+      const scenarioCount = countConstraintScenarios(activeConstraints)
+      const allScenarioDefs = buildConstraintScenarios(activeConstraints)
+      const BATCH_SIZE = 16
       setGenerating(true)
       setGenerationProgress(0)
-
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setGenerationProgress(prev => {
-          if (prev >= 90) return prev
-          return prev + Math.random() * 10
-        })
-      }, 500)
+      setGenerationStatus(`Preparing ${scenarioCount} constraint scenarios...`)
 
       try {
-        console.log('Sending constraints to API:', constraints)
-        const response = await fetch('/api/generate-timetable', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            students: mappedStudents,
-            faculty: mappedFaculty,
-            rooms: mappedRooms,
-            constraints
+        console.log('Sending constraints to API:', activeConstraints)
+        const collectedScenarios = []
+
+        for (let offset = 0; offset < allScenarioDefs.length; offset += BATCH_SIZE) {
+          const batch = allScenarioDefs.slice(offset, offset + BATCH_SIZE)
+          const batchEnd = Math.min(offset + BATCH_SIZE, allScenarioDefs.length)
+          setGenerationStatus(
+            `Generating scenarios ${offset + 1}-${batchEnd} of ${allScenarioDefs.length}...`
+          )
+          setGenerationProgress(Math.round((offset / allScenarioDefs.length) * 100))
+
+          const response = await fetch('/api/generate-timetable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              students: mappedStudents,
+              faculty: mappedFaculty,
+              rooms: mappedRooms,
+              subjects: filteredSubjects,
+              constraints: activeConstraints,
+              metadata,
+              generateAllScenarios: true,
+              scenarioIds: batch.map((s) => s.id)
+            })
           })
-        })
-        const result = await response.json()
-        
-        clearInterval(progressInterval)
+          const result = await response.json()
+
+          if (!response.ok) {
+            console.error('Generation failed:', result.error)
+            toast.error(result.error || 'Generation failed')
+            return
+          }
+
+          if (result.scenarios?.length) {
+            collectedScenarios.push(...result.scenarios)
+          }
+        }
+
         setGenerationProgress(100)
-        
-        if (response.ok) {
-          console.log('Generated timetable:', result.timetable)
-          setTimetableData(result.timetable)
-          toast.success('Schedule generated successfully!')
+
+        if (collectedScenarios.length) {
+          const sorted = [...collectedScenarios].sort(
+            (a, b) =>
+              (a.timetable?.summary?.hardViolationCount || 0) -
+                (b.timetable?.summary?.hardViolationCount || 0) ||
+              (b.timetable?.summary?.optimizationScore || 0) -
+                (a.timetable?.summary?.optimizationScore || 0) ||
+              (a.timetable?.summary?.conflictCount || 0) -
+                (b.timetable?.summary?.conflictCount || 0)
+          )
+          const best = sorted[0]
+          setTimetableScenarios(collectedScenarios)
+          setSelectedScenarioId(best.scenarioId)
+          setTimetableData(best.timetable)
+          const sections = getSectionsFromTimetableData(best.timetable)
+          setSelectedViewSectionId(sections[0]?.id || null)
+          toast.success(
+            `${collectedScenarios.length} timetables generated for all constraint combinations!`
+          )
           setCurrentPage('view-timetable')
         } else {
-          console.error('Generation failed:', result.error)
-          toast.error(result.error || 'Generation failed')
+          toast.error('No timetables were generated')
         }
       } catch (error) {
-        clearInterval(progressInterval)
         console.error('Generation error:', error)
         toast.error('Generation failed: ' + error.message)
       } finally {
         setGenerating(false)
+        setGenerationStatus('')
         setTimeout(() => setGenerationProgress(0), 1000)
       }
     } catch (error) {
@@ -414,6 +549,34 @@ export default function AdminDashboard() {
       setGenerating(false)
     }
   }
+
+  const handleScenarioChange = (scenarioId) => {
+    setSelectedScenarioId(scenarioId)
+    const scenario = timetableScenarios.find((s) => s.scenarioId === scenarioId)
+    if (scenario) {
+      setTimetableData(scenario.timetable)
+      const sections = getSectionsFromTimetableData(scenario.timetable)
+      setSelectedViewSectionId((current) => {
+        if (current && sections.some((section) => String(section.id) === String(current))) {
+          return current
+        }
+        return sections[0]?.id || null
+      })
+    }
+  }
+
+  const selectedScenario = timetableScenarios.find((s) => s.scenarioId === selectedScenarioId)
+  const viewSections = getSectionsFromTimetableData(timetableData)
+  const sectionSchedule = timetableData
+    ? getScheduleForSection(timetableData, selectedViewSectionId || viewSections[0]?.id)
+    : null
+  const selectedViewSection = viewSections.find(
+    (section) => String(section.id) === String(selectedViewSectionId || viewSections[0]?.id)
+  )
+  const selectedSectionClassCount = selectedViewSectionId
+    ? timetableData?.sectionSchedules?.[selectedViewSectionId]?.classCount ??
+      flattenSectionSchedule(sectionSchedule).length
+    : 0
 
   const exportToPDF = async () => {
     if (!timetableData) {
@@ -513,7 +676,7 @@ export default function AdminDashboard() {
         </table>
         
         <div style="text-align: center; font-size: 12px; color: #666;">
-          Generated by SmartScheduler.AI • Intelligent Scheduling System
+          Generated by SmartScheduler • Intelligent Scheduling System
         </div>
         
         <div class="no-print" style="margin-top: 20px; text-align: center;">
@@ -604,6 +767,25 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         const result = await response.json()
+        try {
+          localStorage.setItem(
+            'publishedTimetable',
+            JSON.stringify({
+              timetableData,
+              sectionSchedules: timetableData.sectionSchedules,
+              sections: getSectionsFromTimetableData(timetableData),
+              metadata: {
+                ...timetableData.metadata,
+                semester: timetableData.metadata?.semester || selectedSemester,
+                departmentName: timetableData.metadata?.departmentName,
+                publishedAt: new Date().toISOString(),
+                publishedBy: settings?.profile?.name || 'Administrator'
+              }
+            })
+          )
+        } catch (storageError) {
+          console.warn('Could not cache published timetable locally:', storageError)
+        }
         toast.success('Schedule published successfully! Students and faculty can now access it.')
         console.log('Published timetable:', result)
       } else {
@@ -681,247 +863,49 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#f4f6f9] lg:flex">
       <Toaster />
-      
-      {/* Mobile Overlay */}
+
       {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          aria-hidden
         />
       )}
 
-      {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-blue-600 to-blue-700 text-white p-4 z-50 transition-transform duration-300 ease-in-out ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } w-64`}>
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-blue-400">SmartScheduler.AI</span>
-          </div>
+      <AdminSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        currentPage={currentPage}
+        onPageChange={setCurrentPage}
+        adminName={settings?.profile?.name || 'Administrator'}
+        onLogout={handleLogout}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex items-center border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
           <Button
             variant="ghost"
-            size="sm"
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-white hover:bg-blue-500"
+            size="icon"
+            onClick={() => setSidebarOpen(true)}
           >
-            <X className="h-4 w-4" />
+            <Menu className="h-5 w-5" />
           </Button>
-        </div>
-        
-        <nav className="space-y-2">
-          <Button
-            variant={currentPage === 'dashboard' ? 'secondary' : 'ghost'}
-            className="w-full justify-start text-white hover:bg-blue-500"
-            onClick={() => {
-              setCurrentPage('dashboard')
-              setSidebarOpen(false)
-            }}
-          >
-            <Calendar className="h-4 w-4 mr-2" />
-            Dashboard
-          </Button>
-          <Button
-            variant={currentPage === 'data-management' ? 'secondary' : 'ghost'}
-            className="w-full justify-start text-white hover:bg-blue-500"
-            onClick={() => {
-              setCurrentPage('data-management')
-              setSidebarOpen(false)
-            }}
-          >
-            <Users className="h-4 w-4 mr-2" />
-            Data Management
-          </Button>
-          <Button
-            variant={currentPage === 'generate' ? 'secondary' : 'ghost'}
-            className="w-full justify-start text-white hover:bg-blue-500"
-            onClick={() => {
-              setCurrentPage('generate')
-              setSidebarOpen(false)
-            }}
-          >
-            <Brain className="h-4 w-4 mr-2" />
-            Schedule Generation
-          </Button>
-          <Button
-            variant={currentPage === 'view-timetable' ? 'secondary' : 'ghost'}
-            className="w-full justify-start text-white hover:bg-blue-500"
-            onClick={() => {
-              setCurrentPage('view-timetable')
-              setSidebarOpen(false)
-            }}
-          >
-            <Calendar className="h-4 w-4 mr-2" />
-            View Schedules
-          </Button>
-          <Button
-            variant={currentPage === 'settings' ? 'secondary' : 'ghost'}
-            className="w-full justify-start text-white hover:bg-blue-500"
-            onClick={() => {
-              setCurrentPage('settings')
-              setSidebarOpen(false)
-            }}
-          >
-            <Settings className="h-4 w-4 mr-2" />
-            Settings
-          </Button>
-        </nav>
+          <p className="ml-3 font-serif text-lg font-semibold text-[#001a4d]">Admin Portal</p>
+        </header>
 
-        <div className="mt-6 border-t border-blue-400 pt-4">
-          <div className="mb-2 text-xs text-blue-100 uppercase font-semibold tracking-wide">Management</div>
-          <nav className="space-y-2">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-white hover:bg-blue-500"
-              onClick={() => {
-                window.location.href = '/admin/departments'
-              }}
-            >
-              <Building2 className="h-4 w-4 mr-2" />
-              Departments
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-white hover:bg-blue-500"
-              onClick={() => {
-                window.location.href = '/admin/faculty'
-              }}
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Faculty
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-white hover:bg-blue-500"
-              onClick={() => {
-                window.location.href = '/admin/rooms'
-              }}
-            >
-              <DoorOpen className="h-4 w-4 mr-2" />
-              Rooms
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-white hover:bg-blue-500"
-              onClick={() => {
-                window.location.href = '/admin/subjects'
-              }}
-            >
-              <BookOpen className="h-4 w-4 mr-2" />
-              Subjects
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-white hover:bg-blue-500"
-              onClick={() => {
-                window.location.href = '/admin/sections'
-              }}
-            >
-              <LayoutGrid className="h-4 w-4 mr-2" />
-              Sections
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-white hover:bg-blue-500"
-              onClick={() => {
-                window.location.href = '/admin/constraints'
-              }}
-            >
-              <Settings2 className="h-4 w-4 mr-2" />
-              Constraints
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-white hover:bg-blue-500"
-              onClick={() => {
-                window.location.href = '/admin/emergency-update'
-              }}
-            >
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Emergency Update
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-white hover:bg-blue-500"
-              onClick={() => {
-                window.location.href = '/admin/reports'
-              }}
-            >
-              <BarChart2 className="h-4 w-4 mr-2" />
-              Reports
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-white hover:bg-blue-500"
-              onClick={() => {
-                setCurrentPage('generate')
-                setSidebarOpen(false)
-              }}
-            >
-              <Brain className="h-4 w-4 mr-2" />
-              Generate Timetable
-            </Button>
-          </nav>
-        </div>
-
-        <div className="mt-8 border-t border-blue-400 pt-4">
-          <div className="mb-2 text-xs text-blue-100 uppercase font-semibold tracking-wide">Account</div>
-          <Button 
-            variant="destructive" 
-            onClick={handleLogout} 
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium shadow-lg"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ease-in-out ${
-        sidebarOpen ? 'lg:ml-64' : 'ml-0'
-      } p-6`}>
-        {/* Header with Sidebar Toggle */}
-        <div className="flex items-center justify-between mb-6">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="lg:hidden"
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
-          <div className="hidden lg:block">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            </Button>
-          </div>
-          
-          {/* Mobile Logout Button */}
-          <div className="lg:hidden">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
-            >
-              <LogOut className="h-4 w-4 mr-1" />
-              Logout
-            </Button>
-          </div>
-        </div>
+        <main className="flex-1 p-4 md:p-6 lg:p-8">
         {currentPage === 'dashboard' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-3xl font-bold">Welcome, {settings?.profile?.name || 'Administrator'}!</h1>
-                <p className="text-blue-600 font-medium text-sm">AI-Powered Timetable Generation System</p>
-                <p className="text-muted-foreground">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              <div className="flex items-center gap-4">
+                <BrandLogo size={52} priority />
+                <div>
+                  <h1 className="text-3xl font-bold">Welcome, {settings?.profile?.name || 'Administrator'}!</h1>
+                  <p className="text-blue-600 font-medium text-sm">AI-Powered Timetable Generation System</p>
+                  <p className="text-muted-foreground">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                </div>
               </div>
               <div className="flex items-center gap-4">
                 <Button onClick={() => setCurrentPage('generate')}>Generate Schedule</Button>
@@ -1061,19 +1045,19 @@ export default function AdminDashboard() {
                   <CardTitle>AI Constraints & Preferences</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label>Prevent all faculty clashes</Label>
-                    <Switch 
-                      checked={constraints.preventFacultyClashes}
-                      onCheckedChange={(checked) => setConstraints(prev => ({ ...prev, preventFacultyClashes: checked }))}
-                    />
+                  <div className="flex items-center justify-between opacity-80">
+                    <div>
+                      <Label>Prevent all faculty clashes</Label>
+                      <p className="text-xs text-muted-foreground">Hard constraint — always enforced</p>
+                    </div>
+                    <Switch checked={true} disabled />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <Label>Ensure room capacity respected</Label>
-                    <Switch 
-                      checked={constraints.ensureRoomCapacity}
-                      onCheckedChange={(checked) => setConstraints(prev => ({ ...prev, ensureRoomCapacity: checked }))}
-                    />
+                  <div className="flex items-center justify-between opacity-80">
+                    <div>
+                      <Label>Ensure room capacity respected</Label>
+                      <p className="text-xs text-muted-foreground">Hard constraint — always enforced</p>
+                    </div>
+                    <Switch checked={true} disabled />
                   </div>
                   <div>
                     <Label>Minimum break time between (minutes): {constraints.minBreakTime}</Label>
@@ -1245,10 +1229,13 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-4">
                     <Brain className="h-6 w-6 animate-pulse text-blue-600" />
                     <div className="flex-1">
-                      <p className="font-medium">Generating schedule... This may take a few minutes.</p>
+                      <p className="font-medium">
+                        Generating all constraint combinations... This may take several minutes.
+                      </p>
                       <Progress value={generationProgress} className="mt-2" />
                       <p className="text-sm text-muted-foreground mt-1">
-                        AI Brain processing constraints and optimizing schedule...
+                        {generationStatus ||
+                          'Running timetable for each constraint edge case and boolean combination...'}
                       </p>
                     </div>
                   </div>
@@ -1256,9 +1243,27 @@ export default function AdminDashboard() {
               </Card>
             )}
 
+            <Card className="border-dashed">
+              <CardContent className="pt-4 pb-4 space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Generate will create{' '}
+                  <span className="font-semibold text-foreground">
+                    {scenarioCount}
+                  </span>{' '}
+                  timetables — soft constraint ON/OFF combinations plus min-break edge cases.
+                </p>
+                <p className="text-sm text-green-700 font-medium">
+                  Hard constraints are always enforced: no faculty double-booking, no room
+                  double-booking, no section clashes, room capacity respected.
+                </p>
+              </CardContent>
+            </Card>
+
             <div className="flex gap-4">
               <Button onClick={generateTimetable} disabled={generating} className="flex-1">
-                {generating ? 'Generating...' : 'Generate Schedule'}
+                {generating
+                  ? 'Generating all scenarios...'
+                  : `Generate All Scenarios (${scenarioCount})`}
               </Button>
               <Button variant="outline">Save Draft</Button>
               <Button variant="outline">Reset Parameters</Button>
@@ -1273,10 +1278,49 @@ export default function AdminDashboard() {
                 <h1 className="text-3xl font-bold">View & Manage Schedules</h1>
                 {timetableData && (
                   <p className="text-muted-foreground">
-                    Generated schedule with {timetableData.summary?.totalSlots || 0} slots, 
-                    {timetableData.summary?.conflictCount || 0} conflicts, 
-                    {timetableData.summary?.optimizationScore || 0}% optimization score
+                    {timetableScenarios.length > 0 && selectedScenario && (
+                      <>
+                        <span className="font-medium text-foreground">{selectedScenario.scenarioName}</span>
+                        {' · '}
+                        {selectedScenario.shortLabel}
+                        {' · '}
+                      </>
+                    )}
+                    {timetableData.summary?.department || timetableData.metadata?.departmentName
+                      ? `${timetableData.summary?.department || timetableData.metadata?.departmentName}`
+                      : 'Generated schedule'}
+                    {timetableData.summary?.semester
+                      ? ` · Semester ${timetableData.summary.semester}`
+                      : timetableData.metadata?.semester
+                        ? ` · Semester ${timetableData.metadata.semester}`
+                        : ''}
+                    {' · '}{timetableData.summary?.courseUnits || timetableData.summary?.subjectCount || 0} courses/section
+                    ({timetableData.summary?.totalCredits || 0}/18 credits)
+                    {' · '}{timetableData.summary?.totalSlots || 0} classes, 
+                    {timetableData.summary?.conflictCount || 0} conflicts
+                    {typeof timetableData.summary?.gapViolations === 'number'
+                      ? `, ${timetableData.summary.gapViolations} gap issue(s)`
+                      : ''}
+                    {typeof timetableData.summary?.breakViolations === 'number' && timetableData.summary?.minBreakTime
+                      ? `, ${timetableData.summary.breakViolations} break issue(s)`
+                      : ''}
+                    , {timetableData.summary?.optimizationScore || 0}% score
+                    {typeof timetableData.summary?.hardViolationCount === 'number' && (
+                      <>
+                        {' · '}
+                        {timetableData.summary.hardViolationCount === 0 ? (
+                          <span className="text-green-700">Hard constraints OK</span>
+                        ) : (
+                          <span className="text-red-600">
+                            {timetableData.summary.hardViolationCount} hard violation(s)
+                          </span>
+                        )}
+                      </>
+                    )}
                   </p>
+                )}
+                {selectedScenario?.description && (
+                  <p className="text-xs text-muted-foreground mt-1 max-w-4xl">{selectedScenario.description}</p>
                 )}
               </div>
               <div className="flex gap-2">
@@ -1295,29 +1339,159 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <Select defaultValue="fall-2025">
+            {timetableScenarios.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">
+                    Constraint Scenarios ({timetableScenarios.length})
+                  </CardTitle>
+                  <CardDescription>
+                    Har constraint combination ka alag timetable — best score wala pehle select hota hai
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Select value={selectedScenarioId || ''} onValueChange={handleScenarioChange}>
+                    <SelectTrigger className="w-full max-w-2xl">
+                      <SelectValue placeholder="Select a scenario" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timetableScenarios.map((scenario) => (
+                        <SelectItem key={scenario.scenarioId} value={scenario.scenarioId}>
+                          {scenario.scenarioName} — {scenario.shortLabel} —{' '}
+                          {scenario.timetable?.summary?.optimizationScore ?? 0}% score,{' '}
+                          {scenario.timetable?.summary?.conflictCount ?? 0} conflicts
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <ScrollArea className="h-48 rounded-md border">
+                    <div className="p-2">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b text-left">
+                            <th className="p-2 font-medium">Scenario</th>
+                            <th className="p-2 font-medium">Constraints</th>
+                            <th className="p-2 font-medium">Score</th>
+                            <th className="p-2 font-medium">Hard</th>
+                            <th className="p-2 font-medium">Conflicts</th>
+                            <th className="p-2 font-medium">Classes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...timetableScenarios]
+                            .sort(
+                              (a, b) =>
+                                (a.timetable?.summary?.hardViolationCount || 0) -
+                                  (b.timetable?.summary?.hardViolationCount || 0) ||
+                                (b.timetable?.summary?.optimizationScore || 0) -
+                                  (a.timetable?.summary?.optimizationScore || 0) ||
+                                (a.timetable?.summary?.conflictCount || 0) -
+                                  (b.timetable?.summary?.conflictCount || 0)
+                            )
+                            .map((scenario) => (
+                              <tr
+                                key={scenario.scenarioId}
+                                className={`border-b cursor-pointer hover:bg-muted/50 ${
+                                  scenario.scenarioId === selectedScenarioId ? 'bg-blue-50' : ''
+                                }`}
+                                onClick={() => handleScenarioChange(scenario.scenarioId)}
+                              >
+                                <td className="p-2">{scenario.scenarioName}</td>
+                                <td className="p-2 font-mono text-[10px]">{scenario.shortLabel}</td>
+                                <td className="p-2">{scenario.timetable?.summary?.optimizationScore ?? 0}%</td>
+                                <td className="p-2">
+                                  {(scenario.timetable?.summary?.hardViolationCount ?? 0) === 0 ? (
+                                    <span className="text-green-700">OK</span>
+                                  ) : (
+                                    <span className="text-red-600">
+                                      {scenario.timetable?.summary?.hardViolationCount}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-2">{scenario.timetable?.summary?.conflictCount ?? 0}</td>
+                                <td className="p-2">{scenario.timetable?.summary?.totalSlots ?? 0}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex flex-wrap gap-4 items-center">
+              <Select
+                value={timetableData?.metadata?.semester?.toString() || selectedSemester}
+                disabled
+              >
                 <SelectTrigger className="w-48">
-                  <SelectValue />
+                  <SelectValue placeholder="Semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="fall-2025">Fall 2025</SelectItem>
+                  <SelectItem value={String(timetableData?.metadata?.semester || selectedSemester)}>
+                    Semester {timetableData?.metadata?.semester || selectedSemester}
+                  </SelectItem>
                 </SelectContent>
               </Select>
-              <Select defaultValue="bed-fyup">
+              <Select
+                value={timetableData?.metadata?.departmentId || selectedDept}
+                disabled
+              >
                 <SelectTrigger className="w-48">
-                  <SelectValue />
+                  <SelectValue placeholder="Department" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="bed-fyup">B.Ed + FYUP</SelectItem>
+                  <SelectItem value={timetableData?.metadata?.departmentId || selectedDept}>
+                    {timetableData?.summary?.department || timetableData?.metadata?.departmentName || 'Department'}
+                  </SelectItem>
                 </SelectContent>
               </Select>
-              <div className="ml-auto">
+              {viewSections.length > 0 && (
+                <Select
+                  value={String(selectedViewSectionId || viewSections[0]?.id || '')}
+                  onValueChange={setSelectedViewSectionId}
+                >
+                  <SelectTrigger className="w-56">
+                    <SelectValue placeholder="Select section" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {viewSections.map((section) => (
+                      <SelectItem key={section.id} value={String(section.id)}>
+                        {section.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <div className="ml-auto flex gap-2">
                 <Badge variant="secondary" className="bg-green-100 text-green-800">
-                  ✓ {timetableData?.summary?.conflictCount === 0 ? 'No conflicts detected' : `${timetableData?.summary?.conflictCount} conflicts`}
+                  ✓ Hard:{' '}
+                  {(timetableData?.summary?.hardViolationCount ?? 0) === 0
+                    ? 'No faculty/room duplicates'
+                    : `${timetableData.summary.hardViolationCount} violation(s)`}
+                </Badge>
+                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                  ✓ {timetableData?.summary?.conflictCount === 0 ? 'No soft conflicts' : `${timetableData?.summary?.conflictCount} soft conflicts`}
                 </Badge>
               </div>
             </div>
+
+            {selectedViewSection && (
+              <Card className="border-teal-200 bg-teal-50/40">
+                <CardContent className="py-4">
+                  <p className="text-sm">
+                    Showing timetable for{' '}
+                    <span className="font-semibold">{selectedViewSection.name}</span>
+                    {' · '}
+                    {selectedSectionClassCount} classes this week
+                    {' · '}
+                    Har section ko alag timetable — student view
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardContent className="p-0">
@@ -1332,70 +1506,36 @@ export default function AdminDashboard() {
                   <div className="p-4 font-medium border-l">Sunday</div>
                 </div>
                 
-                {/* Generated timetable data */}
-                {timetableData ? (
-                  (() => {
-                    const timeSlots = [
-                      { start: '9:00 AM', end: '10:00 AM', label: '9:00 - 10:00 AM' },
-                      { start: '10:00 AM', end: '11:00 AM', label: '10:00 - 11:00 AM' },
-                      { start: '11:00 AM', end: '12:00 PM', label: '11:00 - 12:00 PM' },
-                      { start: '12:00 PM', end: '1:00 PM', label: '12:00 - 1:00 PM' },
-                      { start: '1:00 PM', end: '2:00 PM', label: '1:00 - 2:00 PM (Lunch)' },
-                      { start: '1:30 PM', end: '2:30 PM', label: '1:30 - 2:30 PM' },
-                      { start: '2:30 PM', end: '3:30 PM', label: '2:30 - 3:30 PM' },
-                      { start: '3:30 PM', end: '4:30 PM', label: '3:30 - 4:30 PM' }
-                    ]
+                {timetableData && sectionSchedule ? (
+                  STANDARD_TIMETABLE_TIME_SLOTS.map((timeSlot, i) => {
                     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-                    
-                    return timeSlots.map((timeSlot, i) => {
-                      const slots = days.map(day => {
-                        // Try to find schedule using either the label or start time as key
-                        const daySchedule = timetableData.schedule?.[day]?.[timeSlot.label] || 
-                                          timetableData.schedule?.[day]?.[timeSlot.start] || 
-                                          timetableData.schedule?.[day]?.[`${timeSlot.start} - ${timeSlot.end}`] || []
-                        return daySchedule.map(slot => {
-                          const title = slot.courseName || ''
-                          const code = slot.courseCode || ''
-                          const fac = slot.faculty || ''
-                          const room = slot.room || ''
-                          const parts = []
-                          if (title) parts.push(title)
-                          if (fac) parts.push(fac)
-                          if (room) parts.push(room)
-                          return parts.join(' • ')
-                        }).join(', ')
-                      })
-                      
-                      return (
-                        <div key={i} className="grid grid-cols-8 border-b">
-                          <div className="p-4 bg-muted/30 font-medium text-xs">{timeSlot.label}</div>
-                          {slots.map((slot, j) => (
+
+                    return (
+                      <div key={i} className="grid grid-cols-8 border-b">
+                        <div className="p-4 bg-muted/30 font-medium text-xs">{timeSlot.label}</div>
+                        {days.map((day, j) => {
+                          const daySchedule =
+                            sectionSchedule?.[day]?.[timeSlot.label] ||
+                            sectionSchedule?.[day]?.[timeSlot.start] ||
+                            sectionSchedule?.[day]?.[`${timeSlot.start} - ${timeSlot.end}`] ||
+                            []
+                          const entry = daySchedule[0]
+
+                          return (
                             <div key={j} className="p-2 border-l min-h-16">
-                              {slot && (
-                                <div className={`p-2 rounded text-xs font-medium ${
-                                  slot.includes('Lunch Break') ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
-                                  slot.includes('English') ? 'bg-blue-100 text-blue-800' :
-                                  slot.includes('Mathematics') ? 'bg-green-100 text-green-800' :
-                                  slot.includes('Science') ? 'bg-purple-100 text-purple-800' :
-                                  slot.includes('History') ? 'bg-orange-100 text-orange-800' :
-                                  slot.includes('Computer') ? 'bg-pink-100 text-pink-800' :
-                                  slot.includes('Data Science') ? 'bg-indigo-100 text-indigo-800' :
-                                  slot.includes('AI') || slot.includes('Artificial Intelligence') ? 'bg-cyan-100 text-cyan-800' :
-                                  slot.includes('ML') || slot.includes('Machine Learning') ? 'bg-teal-100 text-teal-800' :
-                                  slot.includes('Cyber') || slot.includes('Security') ? 'bg-red-100 text-red-800' :
-                                  slot.includes('IoT') || slot.includes('Embedded') ? 'bg-emerald-100 text-emerald-800' :
-                                  slot.includes('Database') || slot.includes('Cloud') ? 'bg-slate-100 text-slate-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {slot}
+                              {entry && (
+                                <div className="p-2 rounded text-xs font-medium bg-teal-50 text-teal-900 border border-teal-100">
+                                  <p className="font-semibold">{entry.courseName}</p>
+                                  {entry.faculty && <p className="mt-1 text-[11px]">{entry.faculty}</p>}
+                                  {entry.room && <p className="text-[11px] text-muted-foreground">{entry.room}</p>}
                                 </div>
                               )}
                             </div>
-                          ))}
-                        </div>
-                      )
-                    })
-                  })()
+                          )
+                        })}
+                      </div>
+                    )
+                  })
                 ) : (
                   <div className="col-span-8 p-8 text-center text-muted-foreground">
                     No schedule generated yet. Please generate a schedule first.
@@ -1483,6 +1623,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
+
         {currentPage === 'settings' && (
           <div className="space-y-6 max-w-3xl">
             <div>
@@ -1493,6 +1634,7 @@ export default function AdminDashboard() {
             <SettingsPanel settings={settings} onSettingsUpdate={setSettings} />
           </div>
         )}
+        </main>
       </div>
     </div>
   )
