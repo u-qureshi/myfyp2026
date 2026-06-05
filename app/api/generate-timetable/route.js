@@ -35,6 +35,24 @@ class TimetableOptimizer {
     this.conflicts = []
   }
 
+  // Helper function to convert time string to minutes
+  getTimeInMinutes(timeString) {
+    if (!timeString) return 0
+    // Handle different time formats
+    const match = timeString.match(/(\d+):(\d+)\s*(AM|PM)?/)
+    if (!match) return 0
+    
+    let hours = parseInt(match[1])
+    const minutes = parseInt(match[2])
+    const period = match[3]
+    
+    // Convert to 24-hour format
+    if (period === 'PM' && hours !== 12) hours += 12
+    if (period === 'AM' && hours === 12) hours = 0
+    
+    return hours * 60 + minutes
+  }
+
   // Core AI Rules Implementation
   validateRule1(studentId, timeSlot, roomId) {
     // Rule 1: A student cannot be in two places at once
@@ -119,12 +137,44 @@ class TimetableOptimizer {
       const facultyId = f.id || f['Faculty ID'] || f.Faculty_ID
       const facultyInfo = facultyWorkload[facultyId]
       
-      // Check if faculty is already scheduled at this time
-      const facultyAlreadyScheduled = timetable.some(slot => 
-        slot.facultyId === facultyId &&
-        slot.day === day &&
-        slot.timeSlot === time
-      )
+      // CONSTRAINT: Prevent faculty clashes
+      if (this.constraints.preventFacultyClashes) {
+        const facultyAlreadyScheduled = timetable.some(slot => 
+          slot.facultyId === facultyId &&
+          slot.day === day &&
+          slot.timeSlot === time
+        )
+        if (facultyAlreadyScheduled) return false
+      }
+
+      // CONSTRAINT: Check minimum break time between classes
+      if (this.constraints.minBreakTime && this.constraints.minBreakTime > 0) {
+        const minBreakMinutes = this.constraints.minBreakTime
+        const lastSlot = timetable.filter(slot => slot.facultyId === facultyId && slot.day === day)
+          .sort((a, b) => this.getTimeInMinutes(a.timeSlot) - this.getTimeInMinutes(b.timeSlot))
+          .pop()
+        
+        if (lastSlot) {
+          const currentTimeMinutes = this.getTimeInMinutes(time)
+          const lastEndTimeMinutes = this.getTimeInMinutes(lastSlot.timeSlot) + 60 // Assume 1-hour classes
+          const breakGap = currentTimeMinutes - lastEndTimeMinutes
+          
+          if (breakGap < minBreakMinutes) {
+            return false // Not enough break time
+          }
+        }
+      }
+
+      // CONSTRAINT: Balance workload - max classes per day
+      if (this.constraints.balanceWorkload) {
+        const maxClassesPerDay = 4
+        const classesToday = timetable.filter(slot => 
+          slot.facultyId === facultyId && slot.day === day && slot.courseType !== 'break'
+        ).length
+        if (classesToday >= maxClassesPerDay) {
+          return false
+        }
+      }
       
       // Double-check that this faculty can actually teach this course
       const facultySubjects = f.subjects || f.Subjects || f.courses || ''
@@ -134,22 +184,23 @@ class TimetableOptimizer {
         course.name.toLowerCase().includes(subject.toLowerCase())
       )
       
-      return !facultyAlreadyScheduled && facultyInfo && facultyInfo.currentHours < facultyInfo.maxHours && canTeachCourse
+      return facultyInfo && facultyInfo.currentHours < facultyInfo.maxHours && canTeachCourse
     })
 
     if (availableFacultyForSlot.length === 0) {
       return false
     }
 
-    // Check room availability at this time slot
-    const roomAlreadyBooked = timetable.some(slot => 
-      (slot.roomId === (selectedRoom.id || selectedRoom['Room ID'] || selectedRoom.Room_ID)) &&
-      slot.day === day &&
-      slot.timeSlot === time
-    )
-
-    if (roomAlreadyBooked) {
-      return false
+    // CONSTRAINT: Check room availability
+    if (this.constraints.ensureRoomCapacity) {
+      const roomAlreadyBooked = timetable.some(slot => 
+        (slot.roomId === (selectedRoom.id || selectedRoom['Room ID'] || selectedRoom.Room_ID)) &&
+        slot.day === day &&
+        slot.timeSlot === time
+      )
+      if (roomAlreadyBooked) {
+        return false
+      }
     }
 
     const selectedFaculty = availableFacultyForSlot[Math.floor(Math.random() * availableFacultyForSlot.length)]
@@ -183,12 +234,21 @@ class TimetableOptimizer {
 
   // Genetic Algorithm Implementation
   generateRandomTimetable() {
-    // Updated time slots with lunch break at 1:00-1:30 PM, ending at 3:30 PM
-    const timeSlots = ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:30 PM', '2:30 PM', '3:30 PM']
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] // Ensure Friday is included
+    // Updated time slots with proper start and end times
+    const timeSlots = [
+      { start: '9:00 AM', end: '10:00 AM', label: '9:00 - 10:00 AM' },
+      { start: '10:00 AM', end: '11:00 AM', label: '10:00 - 11:00 AM' },
+      { start: '11:00 AM', end: '12:00 PM', label: '11:00 - 12:00 PM' },
+      { start: '12:00 PM', end: '1:00 PM', label: '12:00 - 1:00 PM' },
+      { start: '1:00 PM', end: '1:30 PM', label: '1:00 - 1:30 PM (Lunch)' },
+      { start: '1:30 PM', end: '2:30 PM', label: '1:30 - 2:30 PM' },
+      { start: '2:30 PM', end: '3:30 PM', label: '2:30 - 3:30 PM' },
+      { start: '3:30 PM', end: '4:30 PM', label: '3:30 - 4:30 PM' }
+    ]
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     const timetable = []
-    const usedSlots = new Set() // Track used time slots to avoid conflicts
-    const facultyWorkload = {} // Track faculty hours per week
+    const usedSlots = new Set()
+    const facultyWorkload = {}
     
     // Add lunch break slot to all days (1:00 PM - 1:30 PM)
     days.forEach(day => {
@@ -201,19 +261,20 @@ class TimetableOptimizer {
         roomId: null,
         roomName: null,
         day: day,
-        timeSlot: '1:00 PM',
+        timeSlot: '1:00 - 1:30 PM (Lunch)',
         students: [],
         studentCount: 0,
         studentNames: [],
         courseType: 'break'
       })
-      usedSlots.add(`${day}-1:00 PM`)
+      usedSlots.add(`${day}-1:00 - 1:30 PM (Lunch)`)
     })
 
     console.log('📚 Using uploaded data:')
     console.log('Students:', this.students?.length || 0)
     console.log('Faculty:', this.faculty?.length || 0)
     console.log('Rooms:', this.rooms?.length || 0)
+    console.log('Constraints:', this.constraints)
 
     if (this.students && this.students.length > 0 && this.faculty && this.faculty.length > 0 && this.rooms && this.rooms.length > 0) {
       // Initialize faculty workload tracking
@@ -223,11 +284,23 @@ class TimetableOptimizer {
         facultyWorkload[facultyId] = {
           currentHours: 0,
           maxHours: maxHours,
-          name: faculty.Name || faculty.name || faculty.Faculty_Name
+          name: faculty.Name || faculty.name || faculty.Faculty_Name,
+          dailyClasses: {}, // Track classes per day for balancing
+          lastClassTime: null // Track last class time for minimum break
         }
+        // Initialize daily class tracking
+        days.forEach(day => {
+          facultyWorkload[facultyId].dailyClasses[day] = 0
+        })
       })
 
       console.log('👨‍🏫 Faculty workload limits:', facultyWorkload)
+      console.log('⚙️ Constraints enabled:', {
+        preventFacultyClashes: this.constraints.preventFacultyClashes,
+        minBreakTime: this.constraints.minBreakTime,
+        balanceWorkload: this.constraints.balanceWorkload,
+        minimizeGaps: this.constraints.minimizeGaps
+      })
 
       // Group students by their electives to create classes
       const electiveGroups = {}

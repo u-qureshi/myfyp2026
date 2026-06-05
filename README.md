@@ -1,6 +1,6 @@
-# AI Timetable Generation System - SIH Project
+# SmartScheduler.AI - Intelligent Scheduling System
 
-A comprehensive AI-powered timetable generation system built with Next.js for educational institutions. This project features genetic algorithm optimization, modern UI/UX design, and comprehensive data management capabilities.
+A comprehensive AI-powered intelligent scheduling system built with Next.js for educational institutions. This project features genetic algorithm optimization, modern UI/UX design, and comprehensive data management capabilities.
 
 ## 🚀 Live Demo
 
@@ -10,23 +10,24 @@ Deploy your own instance:
 
 ## ✨ Features
 
-- **AI-Powered Generation**: Advanced genetic algorithm for optimal timetable creation
+- **AI-Powered Generation**: Advanced genetic algorithm for optimal scheduling creation
 - **Modern UI/UX**: Clean, intuitive interface with responsive design
 - **Comprehensive Management**: Complete CRUD operations for students, faculty, and rooms
 - **Smart Constraints**: Configurable scheduling constraints and preferences
 - **Multiple Export Options**: PDF, Excel, and publish functionality
 - **Sample Data**: Pre-loaded demo data for immediate testing
-- **Lunch Break Integration**: Intelligent break scheduling
-- **Real-time Preview**: Instant timetable visualization
+- **Break Management**: Intelligent break scheduling
+- **Real-time Preview**: Instant schedule visualization
 
 ## 🛠️ Technology Stack
 
 - **Frontend**: Next.js 14, React 18, TailwindCSS
-- **Backend**: Next.js API Routes, MongoDB
+- **Backend**: Next.js API Routes, Supabase PostgreSQL
 - **Authentication**: JWT with demo mode
 - **File Processing**: XLSX.js for Excel handling
 - **Export**: jsPDF, Puppeteer for PDF generation
 - **UI Components**: Radix UI, Shadcn/ui
+- **Database**: Supabase (PostgreSQL) with Row Level Security
 - **Optimization**: Genetic Algorithm implementation
 
 ## 🚀 Quick Start
@@ -41,8 +42,8 @@ Deploy your own instance:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/karthik05072005/ai-time-table.git
-   cd ai-time-table
+   git clone https://github.com/karthik05072005/smartscheduler-ai.git
+   cd smartscheduler-ai
    ```
 
 2. **Install dependencies**
@@ -59,8 +60,9 @@ Deploy your own instance:
    
    Edit `.env.local` with your configurations:
    ```env
-   MONGO_URL=mongodb://localhost:27017
-   DB_NAME=timetable_ai
+   NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
    JWT_SECRET=your-super-secret-jwt-key-here
    NODE_ENV=development
    ```
@@ -85,7 +87,7 @@ Deploy your own instance:
 ## 📁 Project Structure
 
 ```
-ai-time-table/
+smartscheduler-ai/
 ├── app/
 │   ├── api/              # API routes
 │   │   ├── auth/          # Authentication endpoints
@@ -109,8 +111,9 @@ ai-time-table/
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MONGO_URL` | MongoDB connection string | `mongodb://localhost:27017` |
-| `DB_NAME` | Database name | `timetable_ai` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Required |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | Required |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Required |
 | `JWT_SECRET` | JWT signing secret | Required |
 | `NODE_ENV` | Environment mode | `development` |
 | `CORS_ORIGINS` | Allowed CORS origins | `*` |
@@ -121,7 +124,9 @@ ai-time-table/
 
 1. **Connect your GitHub repository to Vercel**
 2. **Set environment variables**:
-   - `MONGO_URL`: Your MongoDB Atlas connection string
+   - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anon key
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
    - `JWT_SECRET`: A secure random string
    - `NODE_ENV`: `production`
 3. **Deploy automatically on push**
@@ -167,12 +172,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If you encounter any issues or have questions:
 
 1. Check the [documentation](docs/)
-2. Search [existing issues](https://github.com/karthik05072005/ai-time-table/issues)
-3. Create a [new issue](https://github.com/karthik05072005/ai-time-table/issues/new)
+2. Search [existing issues](https://github.com/karthik05072005/smartscheduler-ai/issues)
+3. Create a [new issue](https://github.com/karthik05072005/smartscheduler-ai/issues/new)
 
 ## 🏆 SIH 2024
 
-This project was developed for Smart India Hackathon 2024, focusing on solving real-world problems in educational scheduling through innovative AI solutions.
+This project (SmartScheduler.AI) was developed for Smart India Hackathon 2024, focusing on solving real-world problems in educational scheduling through innovative AI solutions.
 
 ---
 
