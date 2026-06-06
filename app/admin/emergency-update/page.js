@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Menu, X, LogOut, AlertTriangle, Building2, CheckCircle2, Loader2 } from 'lucide-react'
-import { SidebarBrandMark, PortalHeaderBrand } from '@/components/BrandLogo'
-import { toast, Toaster } from 'sonner'
+import { AlertTriangle, Building2, CheckCircle2, Loader2 } from 'lucide-react'
+import { AdminPortalShell } from '@/components/admin/AdminPortalShell'
+import { adminTheme } from '@/components/admin/admin-theme'
+import { toast } from 'sonner'
 import {
   Select,
   SelectContent,
@@ -19,7 +20,6 @@ import {
 
 export default function EmergencyUpdate() {
   const router = useRouter()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [adminName, setAdminName] = useState('Administrator')
   const [updateType, setUpdateType] = useState(null)
   const [faculty, setFaculty] = useState([])
@@ -199,10 +199,6 @@ export default function EmergencyUpdate() {
     setSuccessResult(null)
   }
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.href = '/login'
-  }
 
   const getSelectedItemName = () => {
     if (updateType === 'teacher-leave') {
@@ -215,150 +211,11 @@ export default function EmergencyUpdate() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
-      <Toaster />
-
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-purple-600 to-purple-700 text-white p-4 z-50 transition-transform duration-300 ease-in-out ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } w-64`}>
-        <div className="relative mb-8 flex justify-center pt-1">
-          <SidebarBrandMark size={72} priority />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarOpen(false)}
-            className="absolute right-0 top-0 lg:hidden text-white hover:bg-purple-500"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <nav className="space-y-2">
-          <Button
-            variant="secondary"
-            className="w-full justify-start"
-            onClick={() => setSidebarOpen(false)}
-          >
-            Dashboard
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/departments')}
-          >
-            Departments
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/faculty')}
-          >
-            Faculty
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/rooms')}
-          >
-            Rooms
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/subjects')}
-          >
-            Subjects
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/sections')}
-          >
-            Sections
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/constraints')}
-          >
-            Constraints
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/dashboard')}
-          >
-            Generate Timetable
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/reports')}
-          >
-            Reports
-          </Button>
-        </nav>
-
-        <div className="mt-8 border-t border-purple-400 pt-4">
-          <div className="mb-2 text-xs text-purple-100 uppercase font-semibold tracking-wide">Account</div>
-          <Button
-            variant="destructive"
-            onClick={handleLogout}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ease-in-out ${
-        sidebarOpen ? 'lg:ml-64' : 'ml-0'
-      }`}>
-        {/* Header */}
-        <div className="sticky top-0 z-40 bg-white border-b border-purple-200 shadow-sm">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                <Menu className="h-4 w-4" />
-              </Button>
-              <PortalHeaderBrand
-                title="Emergency Timetable Update"
-                subtitle="Handle urgent scheduling changes quickly"
-                titleClassName="text-2xl font-bold text-purple-900"
-              />
-            </div>
-
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">{adminName}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 lg:hidden"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Page Content */}
-        <div className="p-4 lg:p-6">
+    <AdminPortalShell
+      title="Emergency Timetable Update"
+      subtitle="Handle urgent scheduling changes quickly"
+      adminName={adminName}
+    >
           {successResult ? (
             // Success Result Card
             <div className="max-w-2xl mx-auto">
@@ -386,7 +243,7 @@ export default function EmergencyUpdate() {
                     <div className="flex flex-col sm:flex-row gap-3 w-full">
                       <Button
                         onClick={() => router.push('/admin/dashboard')}
-                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                        className={`flex-1 ${adminTheme.primaryBtn} text-white`}
                       >
                         View Updated Timetable
                       </Button>
@@ -541,7 +398,7 @@ export default function EmergencyUpdate() {
                     <Button
                       onClick={handleProcessUpdate}
                       disabled={processing}
-                      className="flex-1 sm:flex-none bg-purple-600 hover:bg-purple-700 text-white"
+                      className={`flex-1 sm:flex-none ${adminTheme.primaryBtn} text-white`}
                     >
                       {processing ? (
                         <>
@@ -557,8 +414,6 @@ export default function EmergencyUpdate() {
               )}
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </AdminPortalShell>
   )
 }

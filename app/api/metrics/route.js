@@ -1,22 +1,10 @@
-import { MongoClient } from 'mongodb'
 import { NextResponse } from 'next/server'
-
-// MongoDB connection (reused per process)
-let client
-let db
-
-async function connectToMongo() {
-  if (!client) {
-    client = new MongoClient(process.env.MONGO_URL)
-    await client.connect()
-    db = client.db(process.env.DB_NAME)
-  }
-  return db
-}
+import { countUploadedDataByType } from '@/lib/legacy-store'
+import { supabaseServer } from '@/lib/supabase'
 
 function handleCORS(response) {
   response.headers.set('Access-Control-Allow-Origin', process.env.CORS_ORIGINS || '*')
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   response.headers.set('Access-Control-Allow-Credentials', 'true')
   return response
@@ -28,29 +16,25 @@ export async function OPTIONS() {
 
 export async function GET() {
   try {
-    const database = await connectToMongo()
+    const [uploadedStudents, uploadedFaculty, uploadedRooms, sectionsRes, facultyRes, roomsRes] =
+      await Promise.all([
+        countUploadedDataByType('students'),
+        countUploadedDataByType('faculty'),
+        countUploadedDataByType('rooms'),
+        supabaseServer.from('sections').select('*', { count: 'exact', head: true }),
+        supabaseServer.from('users').select('*', { count: 'exact', head: true }).eq('role', 'faculty'),
+        supabaseServer.from('rooms').select('*', { count: 'exact', head: true })
+      ])
 
-    const [students, faculty, rooms] = await Promise.all([
-      database.collection('students_data').countDocuments({}),
-      database.collection('faculty_data').countDocuments({}),
-      database.collection('rooms_data').countDocuments({})
-    ])
+    const students = uploadedStudents || sectionsRes.count || 0
+    const faculty = uploadedFaculty || facultyRes.count || 0
+    const rooms = uploadedRooms || roomsRes.count || 0
 
-    return handleCORS(NextResponse.json({
-      students,
-      faculty,
-      rooms
-    }))
+    return handleCORS(NextResponse.json({ students, faculty, rooms }))
   } catch (error) {
-    // If MongoDB is not reachable, provide a graceful response
-    return handleCORS(NextResponse.json({
-      error: 'Database not available',
-      students: null,
-      faculty: null,
-      rooms: null
-    }, { status: 200 }))
+    console.error('Metrics error:', error)
+    return handleCORS(
+      NextResponse.json({ error: 'Database not available', students: null, faculty: null, rooms: null })
+    )
   }
 }
-
-
-

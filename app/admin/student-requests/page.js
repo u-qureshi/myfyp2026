@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { toast, Toaster } from 'sonner'
-import { ArrowLeft, CheckCircle2, Users, Loader2 } from 'lucide-react'
-import { BrandLogo, BrandLoadingScreen, PortalHeaderBrand } from '@/components/BrandLogo'
+import { toast } from 'sonner'
+import { CheckCircle2, Loader2 } from 'lucide-react'
+import { BrandLoadingScreen } from '@/components/BrandLogo'
+import { AdminPortalShell } from '@/components/admin/AdminPortalShell'
+import { adminTheme } from '@/components/admin/admin-theme'
 
 const STATUS_COLORS = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -18,6 +19,7 @@ const STATUS_COLORS = {
 }
 
 export default function AdminStudentRequestsPage() {
+  const [adminName, setAdminName] = useState('Administrator')
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [approving, setApproving] = useState(false)
@@ -36,6 +38,13 @@ export default function AdminStudentRequestsPage() {
   }
 
   useEffect(() => {
+    fetch('/api/auth/check-session', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user?.name) setAdminName(data.user.name)
+      })
+      .catch(() => {})
+
     loadRequests()
   }, [])
 
@@ -70,29 +79,18 @@ export default function AdminStudentRequestsPage() {
   const pendingCount = requests.filter((r) => r.status === 'pending').length
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <Toaster />
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4 min-w-0">
-            <BrandLogo size={72} priority />
-            <div>
-              <Link href="/admin/dashboard" className="text-sm text-muted-foreground hover:underline flex items-center gap-1 mb-1">
-                <ArrowLeft className="h-4 w-4" /> Admin Dashboard
-              </Link>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                <Users className="h-8 w-8 text-blue-600" />
-                Student Constraint Requests
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Approve requests → system generates top 5 timetables per student → student picks one
-              </p>
-            </div>
-          </div>
+    <AdminPortalShell
+      title="Student Requests"
+      subtitle="Approve student constraint requests and generate timetable options"
+      adminName={adminName}
+      maxWidth="max-w-5xl mx-auto"
+    >
+      <div className="space-y-6">
+        <div className="flex justify-end">
           <Button
             onClick={handleApproveAll}
             disabled={approving || pendingCount === 0}
-            className="bg-blue-600 hover:bg-blue-700"
+            className={adminTheme.primaryBtn}
           >
             {approving ? (
               <>
@@ -143,6 +141,6 @@ export default function AdminStudentRequestsPage() {
           </div>
         )}
       </div>
-    </div>
+    </AdminPortalShell>
   )
 }

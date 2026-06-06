@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Menu, X, LogOut, TrendingUp, TrendingDown, Download } from 'lucide-react'
-import { SidebarBrandMark, PortalHeaderBrand } from '@/components/BrandLogo'
-import { toast, Toaster } from 'sonner'
+import { TrendingUp, TrendingDown, Download } from 'lucide-react'
+import { AdminPortalShell } from '@/components/admin/AdminPortalShell'
+import { adminTheme } from '@/components/admin/admin-theme'
+import { toast } from 'sonner'
 
 export default function Reports() {
   const router = useRouter()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [adminName, setAdminName] = useState('Administrator')
 
   const facultyData = [
@@ -78,10 +78,6 @@ export default function Reports() {
     checkAuth()
   }, [router])
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.href = '/login'
-  }
 
   const handleExportAll = () => {
     toast.success('Report exported successfully!')
@@ -118,161 +114,16 @@ export default function Reports() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
-      <Toaster />
-
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-purple-600 to-purple-700 text-white p-4 z-50 transition-transform duration-300 ease-in-out ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } w-64`}>
-        <div className="relative mb-8 flex justify-center pt-1">
-          <SidebarBrandMark size={72} priority />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarOpen(false)}
-            className="absolute right-0 top-0 lg:hidden text-white hover:bg-purple-500"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <nav className="space-y-2">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/dashboard')}
-          >
-            Dashboard
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/departments')}
-          >
-            Departments
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/faculty')}
-          >
-            Faculty
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/rooms')}
-          >
-            Rooms
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/subjects')}
-          >
-            Subjects
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/sections')}
-          >
-            Sections
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/constraints')}
-          >
-            Constraints
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/dashboard')}
-          >
-            Generate Timetable
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full justify-start"
-            onClick={() => setSidebarOpen(false)}
-          >
-            Reports
-          </Button>
-        </nav>
-
-        <div className="mt-8 border-t border-purple-400 pt-4">
-          <div className="mb-2 text-xs text-purple-100 uppercase font-semibold tracking-wide">Account</div>
-          <Button
-            variant="destructive"
-            onClick={handleLogout}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ease-in-out ${
-        sidebarOpen ? 'lg:ml-64' : 'ml-0'
-      }`}>
-        {/* Header */}
-        <div className="sticky top-0 z-40 bg-white border-b border-purple-200 shadow-sm">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                <Menu className="h-4 w-4" />
-              </Button>
-              <PortalHeaderBrand
-                title="Reports & Analytics"
-                subtitle="Fall 2025 Semester"
-                titleClassName="text-2xl font-bold text-purple-900"
-              />
-            </div>
-
-            <div className="flex items-center gap-4">
-              <Button
-                onClick={handleExportAll}
-                className="bg-purple-600 hover:bg-purple-700 text-white hidden sm:flex"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export All Reports
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 lg:hidden"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Page Content */}
-        <div className="p-4 lg:p-6">
+    <AdminPortalShell
+      title="Reports & Analytics"
+      subtitle="Fall 2025 Semester"
+      adminName={adminName}
+    >
           {/* Mobile Export Button */}
           <div className="sm:hidden mb-4">
             <Button
               onClick={handleExportAll}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+              className={`w-full ${adminTheme.primaryBtn} text-white`}
             >
               <Download className="h-4 w-4 mr-2" />
               Export All Reports
@@ -336,15 +187,15 @@ export default function Reports() {
             </Card>
 
             {/* Efficiency Score */}
-            <Card className="bg-white border-l-4 border-l-purple-500">
+            <Card className="bg-white border-l-4 border-l-[#001a4d]">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-gray-600">Efficiency Score</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-end justify-between">
                   <div>
-                    <div className="text-3xl font-bold text-purple-600">92%</div>
-                    <p className="text-xs font-semibold text-purple-600 mt-1">Excellent</p>
+                    <div className="text-3xl font-bold text-[#001a4d]">92%</div>
+                    <p className="text-xs font-semibold text-[#001a4d] mt-1">Excellent</p>
                   </div>
                 </div>
               </CardContent>
@@ -361,7 +212,7 @@ export default function Reports() {
               <Button
                 onClick={handleExportAll}
                 variant="outline"
-                className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                className="text-[#001a4d] border-[#001a4d]/20 hover:bg-[#001a4d]/5"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Export
@@ -429,8 +280,6 @@ export default function Reports() {
               </div>
             </CardContent>
           </Card>
-        </div>
-      </div>
-    </div>
+    </AdminPortalShell>
   )
 }

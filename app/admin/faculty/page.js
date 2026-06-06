@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { Menu, X, LogOut, Plus, Calendar, Pencil, Trash2, Search, Loader2 } from 'lucide-react'
-import { SidebarBrandMark, PortalHeaderBrand } from '@/components/BrandLogo'
-import { toast, Toaster } from 'sonner'
+import { Plus, Calendar, Pencil, Trash2, Search, Loader2 } from 'lucide-react'
+import { AdminPortalShell } from '@/components/admin/AdminPortalShell'
+import { adminTheme } from '@/components/admin/admin-theme'
+import { toast } from 'sonner'
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,6 @@ import {
 
 export default function FacultyManagement() {
   const router = useRouter()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [adminName, setAdminName] = useState('Administrator')
   const [faculty, setFaculty] = useState([])
   const [loading, setLoading] = useState(true)
@@ -230,10 +230,6 @@ export default function FacultyManagement() {
     }
   }
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.href = '/login'
-  }
 
   const openAddModal = () => {
     setFormData({ name: '', email: '', password: 'faculty123', department_id: '' })
@@ -255,157 +251,19 @@ export default function FacultyManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
-      <Toaster />
-
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-purple-600 to-purple-700 text-white p-4 z-50 transition-transform duration-300 ease-in-out ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } w-64`}>
-        <div className="relative mb-8 flex justify-center pt-1">
-          <SidebarBrandMark size={72} priority />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarOpen(false)}
-            className="absolute right-0 top-0 lg:hidden text-white hover:bg-purple-500"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <nav className="space-y-2">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/dashboard')}
-          >
-            Dashboard
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/departments')}
-          >
-            Departments
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full justify-start"
-            onClick={() => setSidebarOpen(false)}
-          >
-            Faculty
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/rooms')}
-          >
-            Rooms
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/subjects')}
-          >
-            Subjects
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/sections')}
-          >
-            Sections
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/constraints')}
-          >
-            Constraints
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/generate-timetable')}
-          >
-            Generate Timetable
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/reports')}
-          >
-            Reports
-          </Button>
-        </nav>
-
-        <div className="mt-8 border-t border-purple-400 pt-4">
-          <div className="mb-2 text-xs text-purple-100 uppercase font-semibold tracking-wide">Account</div>
-          <Button
-            variant="destructive"
-            onClick={handleLogout}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ease-in-out ${
-        sidebarOpen ? 'lg:ml-64' : 'ml-0'
-      }`}>
-        {/* Header */}
-        <div className="sticky top-0 z-40 bg-white border-b border-purple-200 shadow-sm">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                <Menu className="h-4 w-4" />
-              </Button>
-              <PortalHeaderBrand
-                title="Faculty Management"
-                titleClassName="text-2xl font-bold text-purple-900"
-              />
-            </div>
-
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">{adminName}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 lg:hidden"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Page Content */}
-        <div className="p-4 lg:p-6">
+    <AdminPortalShell
+      title="Faculty Management"
+      subtitle="Manage faculty members and assignments"
+      adminName={adminName}
+    >
           {/* Stats Row */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <Card className="bg-white border-l-4 border-l-purple-500">
+            <Card className="bg-white border-l-4 border-l-[#001a4d]">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-gray-600">Total Faculty</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-purple-600">{stats.total}</div>
+                <div className="text-3xl font-bold text-[#001a4d]">{stats.total}</div>
               </CardContent>
             </Card>
 
@@ -445,7 +303,7 @@ export default function FacultyManagement() {
                 <CardDescription>Manage all faculty in your institution</CardDescription>
               </div>
               <Button
-                className="bg-purple-600 hover:bg-purple-700"
+                className={adminTheme.primaryBtn}
                 onClick={openAddModal}
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -468,7 +326,7 @@ export default function FacultyManagement() {
               {/* Loading State */}
               {loading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                  <Loader2 className="h-6 w-6 animate-spin text-[#001a4d]" />
                   <span className="ml-2 text-gray-600">Loading faculty...</span>
                 </div>
               ) : filteredFaculty.length === 0 ? (
@@ -538,8 +396,6 @@ export default function FacultyManagement() {
               )}
             </CardContent>
           </Card>
-        </div>
-      </div>
 
       {/* Add Faculty Modal */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
@@ -614,7 +470,7 @@ export default function FacultyManagement() {
               Cancel
             </Button>
             <Button
-              className="bg-purple-600 hover:bg-purple-700"
+              className={adminTheme.primaryBtn}
               onClick={handleAddFaculty}
               disabled={submitting}
             >
@@ -691,7 +547,7 @@ export default function FacultyManagement() {
               Cancel
             </Button>
             <Button
-              className="bg-purple-600 hover:bg-purple-700"
+              className={adminTheme.primaryBtn}
               onClick={handleEditFaculty}
               disabled={submitting}
             >
@@ -707,6 +563,6 @@ export default function FacultyManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPortalShell>
   )
 }

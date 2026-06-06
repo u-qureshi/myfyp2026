@@ -6,6 +6,7 @@ import {
   saveTimetableOptions,
   updateConstraintRequest
 } from '@/lib/student-portal-store'
+import { getFacultyAvailabilityReadiness } from '@/lib/faculty-portal-store'
 import { generateTopScenarios, prepareTimetableInput } from '@/lib/generate-top-scenarios'
 
 export async function POST() {
@@ -20,6 +21,23 @@ export async function POST() {
 
     for (const request of approved) {
       try {
+        const readiness = await getFacultyAvailabilityReadiness(
+          request.departmentId,
+          request.semester
+        )
+
+        if (readiness.total > 0 && readiness.submitted === 0) {
+          throw new Error(
+            `No faculty have submitted availability for ${request.departmentName || 'this department'} (Sem ${request.semester}). Send availability requests to faculty first.`
+          )
+        }
+
+        if (readiness.total > 0 && readiness.pendingCount > 0) {
+          throw new Error(
+            `${readiness.pendingCount} faculty still pending: ${readiness.pendingFaculty.slice(0, 3).join(', ')}${readiness.pendingFaculty.length > 3 ? '…' : ''}. Wait for all faculty availability before generating.`
+          )
+        }
+
         const profile = await getStudentProfile(request.userId)
         const input = await prepareTimetableInput(
           request.departmentId,

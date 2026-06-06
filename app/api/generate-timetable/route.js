@@ -1,6 +1,6 @@
-import { MongoClient } from 'mongodb'
 import { v4 as uuidv4 } from 'uuid'
 import { NextResponse } from 'next/server'
+import { saveGeneratedTimetable } from '@/lib/legacy-store'
 import {
   applySemesterCreditRules,
   buildConstraintScenarios,
@@ -10,23 +10,11 @@ import {
   enforceHardConstraints,
   getSlotRoomKey,
   getWeeklySessionPlan,
+  isFacultyAvailableAtSlot,
   normalizeCourseName,
   normalizeRoomKey,
   normalizeCreditHours
 } from '@/lib/timetable-helpers'
-
-// MongoDB connection
-let client
-let db
-
-async function connectToMongo() {
-  if (!client) {
-    client = new MongoClient(process.env.MONGO_URL)
-    await client.connect()
-    db = client.db(process.env.DB_NAME)
-  }
-  return db
-}
 
 // Helper function to handle CORS
 function handleCORS(response) {
@@ -472,6 +460,13 @@ class TimetableOptimizer {
     const availableFacultyForSlot = availableFaculty.filter(f => {
       const facultyId = f.id || f['Faculty ID'] || f.Faculty_ID
       const facultyInfo = facultyWorkload[facultyId]
+
+      // HARD: faculty must be available at this day/time if they submitted availability
+      if (f.hasSubmittedAvailability && f.weeklyAvailability) {
+        if (!isFacultyAvailableAtSlot(f.weeklyAvailability, day, timeLabel)) {
+          return false
+        }
+      }
 
       // HARD: faculty cannot be in two places at the same time
       if (
@@ -1194,13 +1189,6 @@ export { runOptimization }
 
 export async function POST(request) {
   try {
-    let dbInstance = null
-    try {
-      dbInstance = await connectToMongo()
-    } catch (connErr) {
-      console.warn('MongoDB connection failed, proceeding with demo mode:', connErr?.message)
-    }
-    
     const {
       students,
       faculty,
@@ -1263,20 +1251,20 @@ export async function POST(request) {
           (a.timetable.summary?.conflictCount || 0) - (b.timetable.summary?.conflictCount || 0)
       )[0]
 
-      if (batchId && dbInstance) {
-        const timetableRecord = {
+      if (batchId) {
+        await saveGeneratedTimetable({
           id: batchId,
           mode: 'scenarios',
           scenarios: generatedScenarios,
+          timetable: bestScenario?.timetable,
           bestScenarioId: bestScenario?.scenarioId,
           constraints,
-          generatedAt: new Date(),
+          generatedAt: new Date().toISOString(),
           semester: metadata?.semester || 'Fall 2025',
           department: metadata?.departmentName || null,
           program: metadata?.departmentName || 'B.Ed + FYUP'
-        }
-        await dbInstance.collection('generated_timetables').insertOne(timetableRecord)
-        console.log(`✅ Saved ${generatedScenarios.length} scenario timetables to database`)
+        })
+        console.log(`✅ Saved ${generatedScenarios.length} scenario timetables to Supabase`)
       }
 
       return handleCORS(
@@ -1306,12 +1294,11 @@ export async function POST(request) {
       program: metadata?.departmentName || 'B.Ed + FYUP'
     }
     
-    if (dbInstance) {
-      await dbInstance.collection('generated_timetables').insertOne(timetableRecord)
-      console.log('✅ Timetable generation completed successfully and saved to database')
-    } else {
-      console.log('✅ Timetable generation completed successfully (demo mode - not saved to DB)')
-    }
+    await saveGeneratedTimetable({
+      ...timetableRecord,
+      generatedAt: timetableRecord.generatedAt.toISOString()
+    })
+    console.log('✅ Timetable generation completed successfully and saved to Supabase')
     
     console.log(`📈 Results: ${result.summary.totalSlots} slots, ${result.summary.conflictCount} conflicts, ${result.summary.optimizationScore}% score`)
     

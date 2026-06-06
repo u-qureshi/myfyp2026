@@ -1,19 +1,6 @@
 import { NextResponse } from 'next/server'
 import puppeteer from 'puppeteer'
-import { MongoClient } from 'mongodb'
-
-// MongoDB connection
-let client
-let db
-
-async function connectToMongo() {
-  if (!client) {
-    client = new MongoClient(process.env.MONGO_URL)
-    await client.connect()
-    db = client.db(process.env.DB_NAME)
-  }
-  return db
-}
+import { getGeneratedTimetableById } from '@/lib/legacy-store'
 
 // Helper function to handle CORS
 function handleCORS(response) {
@@ -353,12 +340,10 @@ export async function POST(request) {
     // If timetableId is provided, fetch from database
     if (timetableId && !timetableData) {
       try {
-        const db = await connectToMongo()
-        const timetableRecord = await db.collection('generated_timetables').findOne({ id: timetableId })
-        
-        if (timetableRecord) {
+        const timetableRecord = await getGeneratedTimetableById(timetableId)
+        if (timetableRecord?.timetable) {
           finalTimetableData = timetableRecord.timetable
-          console.log('📋 Retrieved timetable from database')
+          console.log('📋 Retrieved timetable from Supabase')
         } else {
           throw new Error('Timetable not found in database')
         }

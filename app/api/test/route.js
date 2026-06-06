@@ -1,24 +1,25 @@
 import { NextResponse } from 'next/server'
-import { MongoClient } from 'mongodb'
+import { supabaseServer } from '@/lib/supabase'
 
 export async function GET() {
   try {
-    const client = new MongoClient(process.env.MONGO_URL)
-    await client.connect()
-    const db = client.db(process.env.DB_NAME)
-    await client.close()
-    
-    return NextResponse.json({ 
-      message: "Test API endpoint working",
-      mongodb: "Connected successfully",
-      mongoUrl: process.env.MONGO_URL ? "Set" : "Not set",
-      dbName: process.env.DB_NAME ? "Set" : "Not set"
+    const { error } = await supabaseServer.from('departments').select('id').limit(1)
+
+    if (error) throw error
+
+    return NextResponse.json({
+      database: 'Supabase PostgreSQL',
+      status: 'Connected successfully',
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'Not set'
     })
   } catch (error) {
-    return NextResponse.json({ 
-      message: "Test API endpoint working",
-      mongodb: "Connection failed",
-      error: error.message
-    })
+    return NextResponse.json(
+      {
+        database: 'Supabase PostgreSQL',
+        status: 'Connection failed',
+        error: error.message
+      },
+      { status: 500 }
+    )
   }
 }

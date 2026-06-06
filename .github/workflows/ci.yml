@@ -10,12 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      mongodb:
-        image: mongo:6.0
-        ports:
-          - 27017:27017
-
     strategy:
       matrix:
         node-version: [18.x, 20.x]
@@ -35,8 +29,9 @@ jobs:
 
     - name: Create environment file
       run: |
-        echo "MONGO_URL=mongodb://localhost:27017" >> .env.local
-        echo "DB_NAME=timetable_ai_test" >> .env.local
+        echo "NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co" >> .env.local
+        echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=test-anon-key" >> .env.local
+        echo "SUPABASE_SERVICE_ROLE_KEY=test-service-role-key" >> .env.local
         echo "JWT_SECRET=test-secret-key" >> .env.local
         echo "CORS_ORIGINS=http://localhost:3000" >> .env.local
         echo "NODE_ENV=test" >> .env.local
@@ -74,12 +69,6 @@ jobs:
       run: npm run build
 
     - name: Deploy to Vercel (if configured)
-      # Uncomment and configure for Vercel deployment
-      # uses: amondnet/vercel-action@v25
-      # with:
-      #   vercel-token: ${{ secrets.VERCEL_TOKEN }}
-      #   vercel-org-id: ${{ secrets.ORG_ID }}
-      #   vercel-project-id: ${{ secrets.PROJECT_ID }}
       run: echo "Deployment step - configure your preferred deployment method"
 
   security:

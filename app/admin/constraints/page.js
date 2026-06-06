@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Menu, X, LogOut, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { SidebarBrandMark, PortalHeaderBrand } from '@/components/BrandLogo'
-import { toast, Toaster } from 'sonner'
+import { CheckCircle2, AlertTriangle } from 'lucide-react'
+import { AdminPortalShell } from '@/components/admin/AdminPortalShell'
+import { adminTheme } from '@/components/admin/admin-theme'
+import { toast } from 'sonner'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
 import {
@@ -101,7 +102,6 @@ const SOFT_CONSTRAINTS = [
 
 export default function ConstraintsManagement() {
   const router = useRouter()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [adminName, setAdminName] = useState('Administrator')
   const [hardConstraints, setHardConstraints] = useState(HARD_CONSTRAINTS)
   const [softConstraints, setSoftConstraints] = useState(SOFT_CONSTRAINTS)
@@ -188,170 +188,27 @@ export default function ConstraintsManagement() {
     }
   }
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.href = '/login'
-  }
 
   const enabledSoftCount = softConstraints.filter(c => c.enabled).length
   const totalSoftCount = softConstraints.length
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
-      <Toaster />
-
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-purple-600 to-purple-700 text-white p-4 z-50 transition-transform duration-300 ease-in-out ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } w-64`}>
-        <div className="relative mb-8 flex justify-center pt-1">
-          <SidebarBrandMark size={72} priority />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarOpen(false)}
-            className="absolute right-0 top-0 lg:hidden text-white hover:bg-purple-500"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <nav className="space-y-2">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/dashboard')}
-          >
-            Dashboard
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/departments')}
-          >
-            Departments
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/faculty')}
-          >
-            Faculty
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/rooms')}
-          >
-            Rooms
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/subjects')}
-          >
-            Subjects
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/sections')}
-          >
-            Sections
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full justify-start"
-            onClick={() => setSidebarOpen(false)}
-          >
-            Constraints
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/dashboard')}
-          >
-            Generate Timetable
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-purple-500"
-            onClick={() => router.push('/admin/reports')}
-          >
-            Reports
-          </Button>
-        </nav>
-
-        <div className="mt-8 border-t border-purple-400 pt-4">
-          <div className="mb-2 text-xs text-purple-100 uppercase font-semibold tracking-wide">Account</div>
-          <Button
-            variant="destructive"
-            onClick={handleLogout}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ease-in-out ${
-        sidebarOpen ? 'lg:ml-64' : 'ml-0'
-      }`}>
-        {/* Header */}
-        <div className="sticky top-0 z-40 bg-white border-b border-purple-200 shadow-sm">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                <Menu className="h-4 w-4" />
-              </Button>
-              <PortalHeaderBrand
-                title="Constraints Management"
-                subtitle="Configure hard and soft constraints for intelligent timetable generation"
-                titleClassName="text-2xl font-bold text-purple-900"
-              />
-            </div>
-
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">{adminName}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 lg:hidden"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Page Content */}
-        <div className="p-4 lg:p-6">
+    <AdminPortalShell
+      title="Constraints Management"
+      subtitle="Configure hard and soft constraints for intelligent timetable generation"
+      adminName={adminName}
+    >
           {/* Info Banner */}
-          <Card className="mb-6 bg-gradient-to-r from-purple-500 to-purple-600 border-0 text-white">
+          <Card className="mb-6 bg-gradient-to-r from-[#001a4d] to-[#002d6b] border-0 text-white">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-lg font-semibold">Constraint Status</p>
-                  <p className="text-purple-100 text-sm mt-1">5 Hard Constraints | {enabledSoftCount} of {totalSoftCount} Soft Constraints Enabled</p>
+                  <p className="text-slate-200 text-sm mt-1">5 Hard Constraints | {enabledSoftCount} of {totalSoftCount} Soft Constraints Enabled</p>
                 </div>
                 <div className="text-right">
                   <p className="text-3xl font-bold">{5 + enabledSoftCount}</p>
-                  <p className="text-purple-100 text-sm">Active Constraints</p>
+                  <p className="text-slate-200 text-sm">Active Constraints</p>
                 </div>
               </div>
             </CardContent>
@@ -439,7 +296,7 @@ export default function ConstraintsManagement() {
                       <div className="mt-4 space-y-2">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-semibold text-gray-700">Priority Weight</label>
-                          <span className="text-sm font-bold text-purple-600">{constraint.weight}%</span>
+                          <span className="text-sm font-bold text-[#001a4d]">{constraint.weight}%</span>
                         </div>
                         <Slider
                           value={[constraint.weight]}
@@ -447,7 +304,7 @@ export default function ConstraintsManagement() {
                           min={0}
                           max={100}
                           step={5}
-                          className="[&>span]:bg-purple-600 [&>span]:border-purple-600"
+                          className="[[&>span]:bg-purple-600 [&>span]:border-purple-600>span]:bg-[#001a4d] [[&>span]:bg-purple-600 [&>span]:border-purple-600>span]:border-[#001a4d]"
                         />
                         <div className="flex justify-between text-xs text-gray-500">
                           <span>0%</span>
@@ -466,7 +323,7 @@ export default function ConstraintsManagement() {
             <Button
               onClick={handleSaveConstraints}
               disabled={saving}
-              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold h-12"
+              className={`flex-1 ${adminTheme.primaryBtn} text-white font-semibold h-12`}
             >
               {saving ? (
                 <>
@@ -478,8 +335,6 @@ export default function ConstraintsManagement() {
               )}
             </Button>
           </div>
-        </div>
-      </div>
-    </div>
+    </AdminPortalShell>
   )
 }

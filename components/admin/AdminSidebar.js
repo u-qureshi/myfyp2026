@@ -21,7 +21,8 @@ import {
   AlertTriangle,
   BarChart2,
   LogOut,
-  X
+  X,
+  Clock
 } from 'lucide-react'
 
 const BRAND_LABEL = BRAND_NAME
@@ -41,6 +42,7 @@ const MANAGEMENT_ITEMS = [
   { href: '/admin/subjects', label: 'Subjects', icon: BookOpen },
   { href: '/admin/sections', label: 'Sections', icon: LayoutGrid },
   { href: '/admin/student-requests', label: 'Student Requests', icon: UserCheck },
+  { href: '/admin/faculty-requests', label: 'Faculty Availability', icon: Clock },
   { href: '/admin/constraints', label: 'Constraints', icon: SlidersHorizontal },
   { href: '/admin/emergency-update', label: 'Emergency Update', icon: AlertTriangle },
   { href: '/admin/reports', label: 'Reports', icon: BarChart2 }

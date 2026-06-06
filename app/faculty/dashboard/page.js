@@ -8,24 +8,27 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast, Toaster } from 'sonner'
-import { SidebarBrandMark, BrandLoadingScreen, PortalHeaderBrand, BRAND_NAME } from '@/components/BrandLogo'
-import { 
-  LogOut, Calendar, Clock, BookOpen, Bell, User, Menu, X, 
-  Download, CheckCircle, AlertCircle, Zap
+import { BrandLogo, BrandLoadingScreen } from '@/components/BrandLogo'
+import { FacultySidebar } from '@/components/faculty/FacultySidebar'
+import { facultyTheme } from '@/components/faculty/faculty-theme'
+import { DEFAULT_FACULTY_WEEKLY_AVAILABILITY, FACULTY_WEEK_DAYS } from '@/lib/timetable-helpers'
+import {
+  LogOut, Menu,
+  Download, CheckCircle, AlertCircle, Zap, Info
 } from 'lucide-react'
+
+const TIME_OPTIONS = [
+  '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
+]
 
 export default function FacultyDashboard() {
   const [currentPage, setCurrentPage] = useState('dashboard')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [availability, setAvailability] = useState({
-    Monday: true,
-    Tuesday: true,
-    Wednesday: true,
-    Thursday: true,
-    Friday: true
-  })
+  const [availability, setAvailability] = useState({ ...DEFAULT_FACULTY_WEEKLY_AVAILABILITY })
+  const [availabilityRequest, setAvailabilityRequest] = useState(null)
+  const [submittingAvailability, setSubmittingAvailability] = useState(false)
   const [phone, setPhone] = useState('')
 
   // Sample timetable data
@@ -70,6 +73,19 @@ export default function FacultyDashboard() {
     checkSession()
   }, [])
 
+  useEffect(() => {
+    if (!user) return
+    fetch('/api/faculty/availability', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        setAvailabilityRequest(data.request)
+        if (data.request?.availability && Object.keys(data.request.availability).length) {
+          setAvailability({ ...DEFAULT_FACULTY_WEEKLY_AVAILABILITY, ...data.request.availability })
+        }
+      })
+      .catch(() => {})
+  }, [user])
+
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
@@ -80,15 +96,41 @@ export default function FacultyDashboard() {
     }
   }
 
-  const handleAvailabilityChange = (day) => {
+  const handleAvailabilityChange = (day, field, value) => {
     setAvailability(prev => ({
       ...prev,
-      [day]: !prev[day]
+      [day]: {
+        ...prev[day],
+        [field]: value
+      }
     }))
   }
 
-  const handleUpdateAvailability = () => {
-    toast.success('Availability updated successfully')
+  const handleUpdateAvailability = async () => {
+    setSubmittingAvailability(true)
+    try {
+      const res = await fetch('/api/faculty/availability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          availability,
+          requestId: availabilityRequest?.id || null,
+          forceUpdate: true
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to submit availability')
+        return
+      }
+      toast.success('Availability submitted to admin')
+      setAvailabilityRequest(data.request)
+    } catch {
+      toast.error('Failed to submit availability')
+    } finally {
+      setSubmittingAvailability(false)
+    }
   }
 
   const handleSaveProfile = () => {
@@ -110,124 +152,49 @@ export default function FacultyDashboard() {
   return (
     <>
       <Toaster />
-      <div className="min-h-screen bg-gray-50">
-        {/* Mobile Overlay */}
+      <div className={facultyTheme.shell}>
         {sidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          <div
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
             onClick={() => setSidebarOpen(false)}
+            aria-hidden
           />
         )}
 
-        {/* Sidebar */}
-        <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-purple-600 to-purple-700 text-white p-4 z-50 transition-transform duration-300 w-64 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0`}>
-          <div className="relative mb-8 flex justify-center pt-1">
-            <SidebarBrandMark size={72} priority />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSidebarOpen(false)}
-              className="absolute right-0 top-0 lg:hidden text-white hover:bg-purple-500"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+        <FacultySidebar
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          facultyName={user.name}
+          designation={user.designation || user.department_name || 'Faculty Member'}
+          onLogout={handleLogout}
+        />
 
-          <nav className="space-y-2">
-            <Button
-              variant={currentPage === 'dashboard' ? 'secondary' : 'ghost'}
-              className={`w-full justify-start ${currentPage === 'dashboard' ? 'bg-white text-purple-600' : 'text-white hover:bg-purple-500'}`}
-              onClick={() => {
-                setCurrentPage('dashboard')
-                setSidebarOpen(false)
-              }}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              Dashboard
-            </Button>
-            <Button
-              variant={currentPage === 'timetable' ? 'secondary' : 'ghost'}
-              className={`w-full justify-start ${currentPage === 'timetable' ? 'bg-white text-purple-600' : 'text-white hover:bg-purple-500'}`}
-              onClick={() => {
-                setCurrentPage('timetable')
-                setSidebarOpen(false)
-              }}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              My Timetable
-            </Button>
-            <Button
-              variant={currentPage === 'availability' ? 'secondary' : 'ghost'}
-              className={`w-full justify-start ${currentPage === 'availability' ? 'bg-white text-purple-600' : 'text-white hover:bg-purple-500'}`}
-              onClick={() => {
-                setCurrentPage('availability')
-                setSidebarOpen(false)
-              }}
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              My Availability
-            </Button>
-            <Button
-              variant={currentPage === 'notifications' ? 'secondary' : 'ghost'}
-              className={`w-full justify-start ${currentPage === 'notifications' ? 'bg-white text-purple-600' : 'text-white hover:bg-purple-500'}`}
-              onClick={() => {
-                setCurrentPage('notifications')
-                setSidebarOpen(false)
-              }}
-            >
-              <Bell className="h-4 w-4 mr-2" />
-              Notifications
-            </Button>
-            <Button
-              variant={currentPage === 'profile' ? 'secondary' : 'ghost'}
-              className={`w-full justify-start ${currentPage === 'profile' ? 'bg-white text-purple-600' : 'text-white hover:bg-purple-500'}`}
-              onClick={() => {
-                setCurrentPage('profile')
-                setSidebarOpen(false)
-              }}
-            >
-              <User className="h-4 w-4 mr-2" />
-              Profile
-            </Button>
-          </nav>
-
-          <div className="mt-8 pt-4 border-t border-purple-400">
-            <Button
-              onClick={handleLogout}
-              className="w-full bg-red-600 hover:bg-red-700 text-white"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'ml-0'}`}>
-          {/* Top Navbar */}
-          <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
-            <div className="flex items-center justify-between p-4 max-w-full">
-              <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className={facultyTheme.header}>
+            <div className="flex items-center justify-between gap-4 px-4 py-3 md:px-6">
+              <div className="flex items-center gap-3 min-w-0">
                 <Button
                   variant="ghost"
-                  size="sm"
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="lg:hidden"
+                  size="icon"
+                  className="lg:hidden shrink-0"
+                  onClick={() => setSidebarOpen(true)}
                 >
-                  <Menu className="h-4 w-4" />
+                  <Menu className="h-5 w-5" />
                 </Button>
-                <PortalHeaderBrand
-                  title="Faculty Portal"
-                  subtitle={BRAND_NAME}
-                  titleClassName="text-2xl font-bold text-gray-900"
-                />
+                <BrandLogo size={40} className="hidden md:block shrink-0" />
+                <div className="min-w-0">
+                  <h1 className={facultyTheme.pageTitle}>Faculty Portal</h1>
+                  <p className={facultyTheme.pageSubtitle}>
+                    {user.department_name || 'Department'} · Fall 2025
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="hidden items-center gap-3 sm:flex shrink-0">
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-gray-900">{user.name}</p>
-                  <p className="text-xs text-gray-500">{user.designation || user.email}</p>
+                  <p className="text-sm font-semibold text-[#001a4d]">{user.name}</p>
+                  <p className="text-xs text-slate-500">{user.designation || user.email}</p>
                 </div>
                 <Button
                   onClick={handleLogout}
@@ -240,13 +207,12 @@ export default function FacultyDashboard() {
                 </Button>
               </div>
             </div>
-          </div>
+          </header>
 
-          {/* Dashboard Page */}
+          <main className="flex-1 p-4 md:p-6 lg:p-8">
           {currentPage === 'dashboard' && (
-            <div className="p-6 space-y-6">
-              {/* Welcome Card */}
-              <Card className="border-0 shadow-md bg-gradient-to-r from-purple-50 to-purple-100 border-l-4 border-l-purple-600">
+            <div className="space-y-6">
+              <Card className={facultyTheme.welcomeCard}>
                 <CardHeader>
                   <CardTitle className="text-2xl">Welcome, {user.name}! 👋</CardTitle>
                   <CardDescription>
@@ -262,7 +228,7 @@ export default function FacultyDashboard() {
                     <CardTitle className="text-sm font-medium text-gray-600">Courses Assigned</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-bold text-purple-600">3</div>
+                    <div className={`${facultyTheme.statValue}`}>3</div>
                     <p className="text-xs text-gray-500 mt-1">Active courses</p>
                   </CardContent>
                 </Card>
@@ -272,7 +238,7 @@ export default function FacultyDashboard() {
                     <CardTitle className="text-sm font-medium text-gray-600">Classes This Week</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-bold text-blue-600">12</div>
+                    <div className="text-3xl font-bold text-[#002d6b]">12</div>
                     <p className="text-xs text-gray-500 mt-1">Scheduled classes</p>
                   </CardContent>
                 </Card>
@@ -333,15 +299,15 @@ export default function FacultyDashboard() {
                             <td className="py-3 px-4 font-medium text-gray-700">{time}</td>
                             <td className="py-3 px-4">
                               {time === '09:00-10:00' && (
-                                <div className="bg-purple-100 p-2 rounded text-xs">
-                                  <div className="font-semibold text-purple-900">Data Structures</div>
-                                  <div className="text-purple-700">Room 101</div>
+                                <div className={facultyTheme.timetableCell}>
+                                  <div className={facultyTheme.timetableCellTitle}>Data Structures</div>
+                                  <div className={facultyTheme.timetableCellSub}>Room 101</div>
                                 </div>
                               )}
                               {time === '10:00-11:00' && (
-                                <div className="bg-purple-100 p-2 rounded text-xs">
-                                  <div className="font-semibold text-purple-900">Data Structures</div>
-                                  <div className="text-purple-700">Room 101</div>
+                                <div className={facultyTheme.timetableCell}>
+                                  <div className={facultyTheme.timetableCellTitle}>Data Structures</div>
+                                  <div className={facultyTheme.timetableCellSub}>Room 101</div>
                                 </div>
                               )}
                             </td>
@@ -373,11 +339,10 @@ export default function FacultyDashboard() {
             </div>
           )}
 
-          {/* My Timetable Page */}
           {currentPage === 'timetable' && (
-            <div className="p-6 space-y-6">
+            <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900">My Timetable</h2>
+                <h2 className={facultyTheme.pageTitle}>My Timetable</h2>
                 <p className="text-gray-500">Your complete weekly schedule</p>
               </div>
 
@@ -414,52 +379,108 @@ export default function FacultyDashboard() {
             </div>
           )}
 
-          {/* My Availability Page */}
           {currentPage === 'availability' && (
-            <div className="p-6 space-y-6">
+            <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900">My Availability</h2>
-                <p className="text-gray-500">Set your availability for the week</p>
+                <h2 className={facultyTheme.pageTitle}>My Availability</h2>
+                <p className="text-gray-500">Tell admin which days and hours you can teach</p>
               </div>
+
+              {availabilityRequest?.status === 'requested' && (
+                <Card className="border-l-4 border-l-yellow-500 bg-yellow-50">
+                  <CardContent className="pt-5 flex items-start gap-3">
+                    <Info className="h-5 w-5 text-yellow-700 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-yellow-900">Admin requested your availability</p>
+                      <p className="text-sm text-yellow-800 mt-1">
+                        Semester {availabilityRequest.semester} — submit your weekly hours below so timetables can be generated.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {availabilityRequest?.status === 'submitted' && (
+                <Card className="border-l-4 border-l-green-500 bg-green-50">
+                  <CardContent className="pt-5 flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-700" />
+                    <p className="text-sm text-green-800 font-medium">
+                      Availability submitted — admin will use this when generating timetables. You can update and resubmit anytime.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
 
               <Card>
                 <CardHeader>
                   <CardTitle>Weekly Availability</CardTitle>
-                  <CardDescription>Toggle your availability for each day</CardDescription>
+                  <CardDescription>
+                    For each day, enable teaching and set from–to times. Hard constraints (no double-booking) always apply during generation.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {Object.keys(availability).map((day) => (
-                    <div key={day} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                      <span className="font-medium text-gray-700">{day}</span>
-                      <div className="flex items-center gap-3">
-                        <span className={`text-sm ${availability[day] ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}`}>
-                          {availability[day] ? 'Available' : 'Not Available'}
-                        </span>
-                        <Switch
-                          checked={availability[day]}
-                          onCheckedChange={() => handleAvailabilityChange(day)}
-                          className="data-[state=checked]:bg-green-600"
-                        />
+                  {FACULTY_WEEK_DAYS.map((day) => (
+                    <div key={day} className="p-4 border border-gray-200 rounded-lg space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-800">{day}</span>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-sm ${availability[day]?.enabled ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
+                            {availability[day]?.enabled ? 'Available' : 'Off'}
+                          </span>
+                          <Switch
+                            checked={!!availability[day]?.enabled}
+                            onCheckedChange={(v) => handleAvailabilityChange(day, 'enabled', v)}
+                            className="data-[state=checked]:bg-green-600"
+                          />
+                        </div>
                       </div>
+                      {availability[day]?.enabled && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-gray-500">From</Label>
+                            <select
+                              className="w-full mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                              value={availability[day]?.from || '09:00'}
+                              onChange={(e) => handleAvailabilityChange(day, 'from', e.target.value)}
+                            >
+                              {TIME_OPTIONS.map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-gray-500">To</Label>
+                            <select
+                              className="w-full mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                              value={availability[day]?.to || '16:00'}
+                              onChange={(e) => handleAvailabilityChange(day, 'to', e.target.value)}
+                            >
+                              {TIME_OPTIONS.map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
 
                   <Button
                     onClick={handleUpdateAvailability}
-                    className="w-full mt-6 bg-purple-600 hover:bg-purple-700"
+                    disabled={submittingAvailability}
+                    className={`w-full mt-6 ${facultyTheme.primaryBtn}`}
                   >
-                    Update Availability
+                    {submittingAvailability ? 'Submitting...' : availabilityRequest?.status === 'submitted' ? 'Update & Resubmit to Admin' : 'Submit Availability to Admin'}
                   </Button>
                 </CardContent>
               </Card>
             </div>
           )}
 
-          {/* Notifications Page */}
           {currentPage === 'notifications' && (
-            <div className="p-6 space-y-6">
+            <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900">Notifications</h2>
+                <h2 className={facultyTheme.pageTitle}>Notifications</h2>
                 <p className="text-gray-500">Stay updated with your schedule</p>
               </div>
 
@@ -468,7 +489,7 @@ export default function FacultyDashboard() {
                   <Card key={notif.id} className="border-l-4" style={{
                     borderLeftColor: notif.type === 'success' ? '#10b981' : 
                                     notif.type === 'warning' ? '#f59e0b' : 
-                                    notif.type === 'alert' ? '#ef4444' : '#6366f1'
+                                    notif.type === 'alert' ? '#ef4444' : '#001a4d'
                   }}>
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between">
@@ -493,11 +514,10 @@ export default function FacultyDashboard() {
             </div>
           )}
 
-          {/* Profile Page */}
           {currentPage === 'profile' && (
-            <div className="p-6 space-y-6">
+            <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900">My Profile</h2>
+                <h2 className={facultyTheme.pageTitle}>My Profile</h2>
                 <p className="text-gray-500">Manage your faculty information</p>
               </div>
 
@@ -559,7 +579,7 @@ export default function FacultyDashboard() {
 
                   <Button
                     onClick={handleSaveProfile}
-                    className="w-full bg-purple-600 hover:bg-purple-700"
+                    className={`w-full ${facultyTheme.primaryBtn}`}
                   >
                     Save Profile
                   </Button>
@@ -567,6 +587,7 @@ export default function FacultyDashboard() {
               </Card>
             </div>
           )}
+          </main>
         </div>
       </div>
     </>
