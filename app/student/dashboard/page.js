@@ -297,7 +297,7 @@ export default function StudentDashboard() {
                 <Card className="border-[#c9a227]/30 bg-[#c9a227]/5">
                   <CardContent className="pt-4 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-[#0c1f3f]">
-                      Abhi tak constraints submit nahi ki. Pehle apni preferences choose karein.
+                      You haven&apos;t submitted your constraints yet. Please set your preferences first.
                     </p>
                     <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/constraints')}>
                       Set Constraints →
@@ -425,12 +425,12 @@ export default function StudentDashboard() {
                           <div className="text-center py-8 space-y-3">
                             <p className="text-sm text-gray-500">
                               {!portalRequest
-                                ? 'Pehle constraints submit karein, phir admin approve karega.'
+                                ? 'Submit your constraints first, then wait for admin approval.'
                                 : portalRequest.status === 'pending'
-                                  ? 'Admin approval ka wait ho raha hai.'
+                                  ? 'Waiting for admin approval.'
                                   : portalRequest.status === 'ready'
-                                    ? 'Top 5 options ready hain — ab timetable choose karein.'
-                                    : 'Abhi koi timetable save nahi hui.'}
+                                    ? 'Top 5 options are ready — choose your timetable now.'
+                                    : 'No timetable has been saved yet.'}
                             </p>
                             {!portalRequest && (
                               <Button size="sm" variant="outline" onClick={() => (window.location.href = '/student/constraints')}>
@@ -502,12 +502,12 @@ export default function StudentDashboard() {
                   <CardContent className="py-4 text-sm text-yellow-900 space-y-3">
                     <p>
                       {!portalRequest
-                        ? 'Abhi koi timetable nahi. Pehle constraints submit karein.'
+                        ? 'No timetable available yet. Please submit your constraints first.'
                         : portalRequest.status === 'pending'
-                          ? 'Admin ne abhi approve nahi kiya. Options generate hone ka wait karein.'
+                          ? 'Admin has not approved yet. Please wait for options to be generated.'
                           : portalRequest.status === 'ready'
-                            ? 'Admin ne options generate kar di hain. Ab apni pasand ki timetable choose karein.'
-                            : 'Aapki saved timetable yahan show hogi jab admin process complete ho jaye.'}
+                            ? 'Admin has generated your options. Choose your preferred timetable now.'
+                            : 'Your saved timetable will appear here once the admin process is complete.'}
                     </p>
                     {portalRequest?.status === 'ready' && (
                       <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/pick-timetable')}>
@@ -573,7 +573,7 @@ export default function StudentDashboard() {
               <Card className="shadow-md">
                 <CardHeader className="bg-gradient-to-r from-[#0c1f3f]/5 to-[#c9a227]/5 border-b">
                   <CardTitle>Weekly Schedule</CardTitle>
-                  <CardDescription>Sirf aapki section ki classes</CardDescription>
+                  <CardDescription>Only classes for your section</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   {mySectionSchedule ? (

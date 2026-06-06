@@ -1355,7 +1355,7 @@ export default function AdminDashboard() {
                     Constraint Scenarios ({timetableScenarios.length})
                   </CardTitle>
                   <CardDescription>
-                    Har constraint combination ka alag timetable — best score wala pehle select hota hai
+                    A separate timetable for each constraint combination — the highest-scoring option is selected first
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1496,7 +1496,7 @@ export default function AdminDashboard() {
                     {' · '}
                     {selectedSectionClassCount} classes this week
                     {' · '}
-                    Har section ko alag timetable — student view
+                    Separate timetable per section — student view
                   </p>
                 </CardContent>
               </Card>
