@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser } from '@/lib/auth-session'
 import { listConstraintRequests, getStudentProfile } from '@/lib/student-portal-store'
+import { getFacultyAvailabilityReadiness } from '@/lib/faculty-portal-store'
 import { supabaseServer } from '@/lib/supabase'
 
 export async function GET(request) {
@@ -30,10 +31,16 @@ export async function GET(request) {
           studentEmail = studentEmail || userRow?.email || null
         }
 
+        const facultyReadiness = await getFacultyAvailabilityReadiness(
+          req.departmentId,
+          req.semester
+        ).catch(() => null)
+
         return {
           ...req,
           studentName,
-          studentEmail
+          studentEmail,
+          facultyReadiness
         }
       })
     )

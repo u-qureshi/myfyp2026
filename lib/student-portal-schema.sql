@@ -1,7 +1,7 @@
 -- Student portal tables (run via: npm run db:student-portal)
 
 DO $$ BEGIN
-  CREATE TYPE constraint_request_status AS ENUM ('pending', 'approved', 'ready', 'selected', 'error');
+  CREATE TYPE constraint_request_status AS ENUM ('pending', 'approved', 'ready', 'selected', 'error', 'rejected', 'expired');
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS student_constraint_requests (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     approved_at TIMESTAMP WITH TIME ZONE,
-    ready_at TIMESTAMP WITH TIME ZONE
+    ready_at TIMESTAMP WITH TIME ZONE,
+    rejected_at TIMESTAMP WITH TIME ZONE,
+    rejection_reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS student_timetable_options (
@@ -40,6 +42,7 @@ CREATE TABLE IF NOT EXISTS student_timetable_options (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     request_id UUID REFERENCES student_constraint_requests(id) ON DELETE CASCADE,
     options JSONB NOT NULL DEFAULT '[]',
+    expires_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -51,7 +54,8 @@ CREATE TABLE IF NOT EXISTS student_selected_timetables (
     option_index INTEGER NOT NULL,
     timetable JSONB NOT NULL,
     summary JSONB,
-    selected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    selected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE
 );
 
 CREATE INDEX IF NOT EXISTS idx_student_profiles_user ON student_profiles(user_id);

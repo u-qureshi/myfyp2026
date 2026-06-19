@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser } from '@/lib/auth-session'
 import {
+  cleanupExpiredStudentTimetables,
   getLatestConstraintRequest,
   getLatestTimetableOptions,
   getSelectedTimetable
@@ -13,6 +14,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    await cleanupExpiredStudentTimetables(user.id, { notify: true })
+
     const [request, options, selected] = await Promise.all([
       getLatestConstraintRequest(user.id),
       getLatestTimetableOptions(user.id),
@@ -24,6 +27,7 @@ export async function GET() {
       request,
       options: options?.options || [],
       optionsId: options?.id || null,
+      optionsExpiresAt: options?.expiresAt || null,
       selected
     })
   } catch (error) {

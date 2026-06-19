@@ -170,7 +170,7 @@ CREATE POLICY "Everyone can view sections" ON sections
     FOR SELECT USING (true);
 
 -- Student portal tables
-CREATE TYPE constraint_request_status AS ENUM ('pending', 'approved', 'ready', 'selected', 'error');
+CREATE TYPE constraint_request_status AS ENUM ('pending', 'approved', 'ready', 'selected', 'error', 'rejected', 'expired');
 
 CREATE TABLE student_profiles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -198,7 +198,9 @@ CREATE TABLE student_constraint_requests (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     approved_at TIMESTAMP WITH TIME ZONE,
-    ready_at TIMESTAMP WITH TIME ZONE
+    ready_at TIMESTAMP WITH TIME ZONE,
+    rejected_at TIMESTAMP WITH TIME ZONE,
+    rejection_reason TEXT
 );
 
 CREATE TABLE student_timetable_options (
@@ -206,6 +208,7 @@ CREATE TABLE student_timetable_options (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     request_id UUID REFERENCES student_constraint_requests(id) ON DELETE CASCADE,
     options JSONB NOT NULL DEFAULT '[]',
+    expires_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -217,7 +220,8 @@ CREATE TABLE student_selected_timetables (
     option_index INTEGER NOT NULL,
     timetable JSONB NOT NULL,
     summary JSONB,
-    selected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    selected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE
 );
 
 CREATE INDEX idx_student_profiles_user ON student_profiles(user_id);

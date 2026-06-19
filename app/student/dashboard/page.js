@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +34,8 @@ const PAGE_META = {
 }
 
 export default function StudentDashboard() {
+  const router = useRouter()
+  const pathname = usePathname()
   const [currentPage, setCurrentPage] = useState('dashboard')
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -49,6 +52,7 @@ export default function StudentDashboard() {
   const [selectedSectionId, setSelectedSectionId] = useState(null)
   const [notificationsData, setNotificationsData] = useState([])
   const [hasSelectedTimetable, setHasSelectedTimetable] = useState(false)
+  const [timetableExpiresAt, setTimetableExpiresAt] = useState(null)
 
   const availableSections = useMemo(
     () => getSectionsFromTimetableData(publishedPayload?.timetableData || publishedPayload),
@@ -110,9 +114,11 @@ export default function StudentDashboard() {
         if (data.selected?.timetable) {
           setHasSelectedTimetable(true)
           setPublishedPayload({ timetableData: data.selected.timetable })
+          setTimetableExpiresAt(data.selected.expiresAt || null)
         } else {
           setHasSelectedTimetable(false)
           setPublishedPayload(null)
+          setTimetableExpiresAt(null)
         }
       })
       .catch(() => {})
@@ -157,26 +163,31 @@ export default function StudentDashboard() {
     }
   }, [selectedSectionId])
 
+  const applyHash = useCallback(() => {
+    const hash = window.location.hash.replace('#', '')
+    setCurrentPage(
+      ['timetable', 'notifications', 'profile'].includes(hash) ? hash : 'dashboard'
+    )
+  }, [])
+
   useEffect(() => {
-    const applyHash = () => {
-      const hash = window.location.hash.replace('#', '')
-      if (['timetable', 'notifications', 'profile'].includes(hash)) {
-        setCurrentPage(hash)
-      }
-    }
     applyHash()
     window.addEventListener('hashchange', applyHash)
     return () => window.removeEventListener('hashchange', applyHash)
-  }, [])
+  }, [applyHash])
 
-  const goToPage = (page) => {
+  useEffect(() => {
+    if (pathname === '/student/dashboard') applyHash()
+  }, [pathname, applyHash])
+
+  const goToPage = useCallback((page) => {
     setCurrentPage(page)
     if (page === 'dashboard') {
-      window.history.replaceState(null, '', '/student/dashboard')
+      router.replace('/student/dashboard')
     } else {
-      window.location.hash = page
+      router.replace(`/student/dashboard#${page}`)
     }
-  }
+  }, [router])
 
   // Fetch user session
   useEffect(() => {
@@ -273,6 +284,7 @@ export default function StudentDashboard() {
       user={user}
       loading={false}
       activeNav={currentPage}
+      onNavChange={goToPage}
       unreadCount={unreadCount}
       onLogout={handleLogout}
       title={meta.title}
@@ -299,7 +311,7 @@ export default function StudentDashboard() {
                     <p className="text-sm text-[#0c1f3f]">
                       You haven&apos;t submitted your constraints yet. Please set your preferences first.
                     </p>
-                    <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/constraints')}>
+                    <Button size="sm" className="bg-[#0c1f3f]" onClick={() => router.push('/student/constraints')}>
                       Set Constraints →
                     </Button>
                   </CardContent>
@@ -307,22 +319,52 @@ export default function StudentDashboard() {
               )}
 
               {portalRequest && (
-                <Card className="border-[#0c1f3f]/20">
+                <Card
+                  className={
+                    portalRequest.status === 'rejected' || portalRequest.status === 'expired'
+                      ? 'border-rose-300 bg-rose-50'
+                      : 'border-[#0c1f3f]/20'
+                  }
+                >
                   <CardContent className="pt-4 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm">
-                      Timetable request: <strong>{portalRequest.status}</strong>
-                    </p>
-                    {portalRequest.status === 'pending' && (
-                      <p className="text-xs text-muted-foreground">Waiting for admin approval</p>
-                    )}
+                    <div>
+                      <p className="text-sm">
+                        Timetable request:{' '}
+                        <strong className="capitalize">{portalRequest.status}</strong>
+                      </p>
+                      {portalRequest.status === 'pending' && (
+                        <p className="text-xs text-muted-foreground mt-1">Waiting for admin approval</p>
+                      )}
+                      {portalRequest.status === 'rejected' && (
+                        <p className="text-xs text-rose-700 mt-1">
+                          {portalRequest.rejectionReason ||
+                            'Your request was rejected. Update constraints and resubmit.'}
+                        </p>
+                      )}
+                      {portalRequest.status === 'expired' && (
+                        <p className="text-xs text-rose-700 mt-1">
+                          Your timetable expired after 4 months and was removed. Submit new constraints.
+                        </p>
+                      )}
+                    </div>
                     {portalRequest.status === 'ready' && (
-                      <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/pick-timetable')}>
+                      <Button size="sm" className="bg-[#0c1f3f]" onClick={() => router.push('/student/pick-timetable')}>
                         Pick Your Timetable →
                       </Button>
                     )}
                     {portalRequest.status === 'selected' && (
                       <Button size="sm" variant="outline" onClick={() => goToPage('timetable')}>
                         View Saved Timetable
+                      </Button>
+                    )}
+                    {(portalRequest.status === 'rejected' || portalRequest.status === 'expired') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-rose-300 text-rose-800"
+                        onClick={() => router.push('/student/constraints')}
+                      >
+                        {portalRequest.status === 'expired' ? 'Submit New Constraints →' : 'Update & Resubmit →'}
                       </Button>
                     )}
                   </CardContent>
@@ -340,7 +382,11 @@ export default function StudentDashboard() {
                       {hasSelectedTimetable ? uniqueCourses : '—'}
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      {hasSelectedTimetable ? 'This semester' : 'Timetable not selected yet'}
+                      {hasSelectedTimetable
+                        ? timetableExpiresAt
+                          ? `Valid until ${new Date(timetableExpiresAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+                          : 'This semester'
+                        : 'Timetable not selected yet'}
                     </p>
                   </CardContent>
                 </Card>
@@ -433,12 +479,12 @@ export default function StudentDashboard() {
                                     : 'No timetable has been saved yet.'}
                             </p>
                             {!portalRequest && (
-                              <Button size="sm" variant="outline" onClick={() => (window.location.href = '/student/constraints')}>
+                              <Button size="sm" variant="outline" onClick={() => router.push('/student/constraints')}>
                                 Go to Constraints
                               </Button>
                             )}
                             {portalRequest?.status === 'ready' && (
-                              <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/pick-timetable')}>
+                              <Button size="sm" className="bg-[#0c1f3f]" onClick={() => router.push('/student/pick-timetable')}>
                                 Pick Timetable
                               </Button>
                             )}
@@ -510,15 +556,28 @@ export default function StudentDashboard() {
                             : 'Your saved timetable will appear here once the admin process is complete.'}
                     </p>
                     {portalRequest?.status === 'ready' && (
-                      <Button size="sm" className="bg-[#0c1f3f]" onClick={() => (window.location.href = '/student/pick-timetable')}>
+                      <Button size="sm" className="bg-[#0c1f3f]" onClick={() => router.push('/student/pick-timetable')}>
                         Pick Timetable
                       </Button>
                     )}
                     {!portalRequest && (
-                      <Button size="sm" variant="outline" onClick={() => (window.location.href = '/student/constraints')}>
+                      <Button size="sm" variant="outline" onClick={() => router.push('/student/constraints')}>
                         Set Constraints
                       </Button>
                     )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {hasSelectedTimetable && timetableExpiresAt && (
+                <Card className="border-amber-200 bg-amber-50 mb-4">
+                  <CardContent className="py-3 text-sm text-amber-800 flex items-center gap-2">
+                    <Clock className="h-4 w-4 shrink-0" />
+                    <span>
+                      This timetable is valid until{' '}
+                      <strong>{new Date(timetableExpiresAt).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.
+                      After that it will expire and you can request a new one.
+                    </span>
                   </CardContent>
                 </Card>
               )}

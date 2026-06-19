@@ -21,13 +21,14 @@ function formatRelativeTime(dateStr) {
 }
 
 function mapDbNotification(row) {
+  const isReject = /reject/i.test(row.title || '')
   return {
     id: row.id,
     title: row.title,
     message: row.message,
     time: formatRelativeTime(row.created_at),
     unread: !row.is_read,
-    type: 'info',
+    type: isReject ? 'alert' : 'info',
     source: 'db'
   }
 }
@@ -56,6 +57,33 @@ function buildPortalNotifications({ profile, request, options, selected }) {
       unread: true,
       type: 'info',
       source: 'portal'
+    })
+  }
+
+  if (request?.status === 'rejected') {
+    items.push({
+      id: 'portal-rejected',
+      title: 'Request rejected',
+      message: request.rejectionReason || 'Your constraint request was rejected. You can update and resubmit.',
+      time: formatRelativeTime(request.rejectedAt || request.updatedAt),
+      unread: true,
+      type: 'alert',
+      source: 'portal',
+      href: '/student/constraints'
+    })
+  }
+
+  if (request?.status === 'expired') {
+    items.push({
+      id: 'portal-expired',
+      title: 'Timetable expired',
+      message:
+        'Your timetable validity (4 months) has ended and was removed. Submit new constraints to request a fresh timetable.',
+      time: formatRelativeTime(request.updatedAt),
+      unread: true,
+      type: 'alert',
+      source: 'portal',
+      href: '/student/constraints'
     })
   }
 

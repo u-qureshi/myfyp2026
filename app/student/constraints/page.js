@@ -9,13 +9,11 @@ import { StudentPortalShell } from '@/components/student/StudentPortalShell'
 import { studentTheme } from '@/components/student/student-theme'
 import {
   ConstraintGuideIntro,
-  MinBreakConstraint,
   SoftConstraintField,
   SOFT_CONSTRAINTS
 } from '@/components/student/ConstraintHelp'
 
 const DEFAULT_CONSTRAINTS = {
-  minBreakTime: 10,
   balanceWorkload: true,
   minimizeWalking: true,
   walkingWeight: 80,
@@ -69,7 +67,10 @@ export default function StudentConstraintsPage() {
     pending: 'Waiting for admin approval',
     approved: 'Approved — timetables generating',
     ready: 'Top 5 timetables ready — go pick one!',
-    selected: 'Timetable selected'
+    selected: 'Timetable selected',
+    rejected: 'Rejected by admin — update and resubmit',
+    expired: 'Timetable expired — submit new constraints',
+    error: 'Processing error — waiting for admin retry'
   }
 
   return (
@@ -80,12 +81,23 @@ export default function StudentConstraintsPage() {
       breadcrumbs={['Home', 'Constraints']}
     >
       {request && (
-        <Card className={`${studentTheme.card} mb-6 border-[#c9a227]/40 bg-[#c9a227]/5`}>
+        <Card
+          className={`${studentTheme.card} mb-6 ${
+            request.status === 'rejected' || request.status === 'expired'
+              ? 'border-rose-300 bg-rose-50'
+              : 'border-[#c9a227]/40 bg-[#c9a227]/5'
+          }`}
+        >
           <CardContent className="pt-5 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-[#0c1f3f]">
-              Request status:{' '}
-              <span className="font-semibold capitalize">{statusLabel[request.status] || request.status}</span>
-            </p>
+            <div>
+              <p className="text-sm text-[#0c1f3f]">
+                Request status:{' '}
+                <span className="font-semibold capitalize">{statusLabel[request.status] || request.status}</span>
+              </p>
+              {request.status === 'rejected' && request.rejectionReason && (
+                <p className="text-xs text-rose-700 mt-1">{request.rejectionReason}</p>
+              )}
+            </div>
             {request.status === 'ready' && (
               <Link href="/student/pick-timetable">
                 <Button size="sm" className={studentTheme.accentBtn}>
@@ -107,11 +119,6 @@ export default function StudentConstraintsPage() {
         <CardContent className="space-y-6 pt-6">
           <ConstraintGuideIntro />
 
-          <MinBreakConstraint
-            value={constraints.minBreakTime}
-            onChange={(minBreakTime) => setConstraints((p) => ({ ...p, minBreakTime }))}
-          />
-
           {SOFT_CONSTRAINTS.map((config) => (
             <SoftConstraintField
               key={config.key}
@@ -124,9 +131,20 @@ export default function StudentConstraintsPage() {
           <Button
             className={`w-full py-6 text-base ${studentTheme.primaryBtn}`}
             onClick={handleSubmit}
-            disabled={submitting || request?.status === 'selected'}
+            disabled={
+              submitting ||
+              ['selected', 'pending', 'ready', 'approved'].includes(request?.status)
+            }
           >
-            {submitting ? 'Submitting...' : request ? 'Update & Resubmit to Admin' : 'Submit Constraints to Admin'}
+            {submitting
+              ? 'Submitting...'
+              : request?.status === 'rejected' ||
+                  request?.status === 'error' ||
+                  request?.status === 'expired'
+                ? 'Resubmit Constraints to Admin'
+                : request
+                  ? 'Update & Resubmit to Admin'
+                  : 'Submit Constraints to Admin'}
           </Button>
         </CardContent>
       </Card>

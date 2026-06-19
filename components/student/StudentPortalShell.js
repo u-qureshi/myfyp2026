@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Toaster } from 'sonner'
@@ -47,12 +47,14 @@ export function StudentPortalShell({
   breadcrumbs = [],
   activeNav,
   unreadCount = 0,
+  onNavChange,
   user: userProp,
   loading: loadingProp,
   onLogout,
   maxWidth = 'w-full'
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const session = useStudentSession()
   const user = userProp ?? session.user
   const loading = loadingProp ?? session.loading
@@ -64,8 +66,30 @@ export function StudentPortalShell({
 
   const resolvedActive =
     activeNav ||
+    NAV_LINKS.find((item) => {
+      if (item.hash) {
+        return item.href === pathname && typeof window !== 'undefined' && window.location.hash === `#${item.hash}`
+      }
+      return item.href === pathname && (typeof window === 'undefined' || !window.location.hash)
+    })?.id ||
     NAV_LINKS.find((item) => item.href === pathname && !item.hash)?.id ||
     'dashboard'
+
+  const handleNavClick = (item, e) => {
+    setSidebarOpen(false)
+
+    if (item.hash && onNavChange && pathname === item.href) {
+      e.preventDefault()
+      onNavChange(item.id)
+      return
+    }
+
+    if (!item.hash && pathname === item.href && typeof window !== 'undefined' && window.location.hash) {
+      e.preventDefault()
+      onNavChange?.('dashboard')
+      router.replace(item.href)
+    }
+  }
 
   return (
     <>
@@ -107,7 +131,7 @@ export function StudentPortalShell({
                 <Link
                   key={item.id}
                   href={href}
-                  onClick={() => setSidebarOpen(false)}
+                  onClick={(e) => handleNavClick(item, e)}
                   className={`${studentTheme.navItem} ${isActive ? studentTheme.navItemActive : ''}`}
                 >
                   <Icon className="h-5 w-5 shrink-0" />

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast, Toaster } from 'sonner'
 import { BrandLogo, BrandLoadingScreen } from '@/components/BrandLogo'
 import { FacultySidebar } from '@/components/faculty/FacultySidebar'
@@ -27,7 +28,9 @@ export default function FacultyDashboard() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [availability, setAvailability] = useState({ ...DEFAULT_FACULTY_WEEKLY_AVAILABILITY })
+  const [availabilityRequests, setAvailabilityRequests] = useState([])
   const [availabilityRequest, setAvailabilityRequest] = useState(null)
+  const [selectedSemester, setSelectedSemester] = useState('')
   const [submittingAvailability, setSubmittingAvailability] = useState(false)
   const [phone, setPhone] = useState('')
 
@@ -73,14 +76,39 @@ export default function FacultyDashboard() {
     checkSession()
   }, [])
 
+  const applyAvailabilityRequest = (request) => {
+    setAvailabilityRequest(request)
+    if (request?.availability && Object.keys(request.availability).length) {
+      setAvailability({ ...DEFAULT_FACULTY_WEEKLY_AVAILABILITY, ...request.availability })
+    } else {
+      setAvailability({ ...DEFAULT_FACULTY_WEEKLY_AVAILABILITY })
+    }
+  }
+
+  const loadAvailabilityForSemester = async (semester) => {
+    try {
+      const res = await fetch(`/api/faculty/availability?semester=${semester}`, {
+        credentials: 'include'
+      })
+      const data = await res.json()
+      if (!res.ok) return
+      setAvailabilityRequests(data.requests || [])
+      applyAvailabilityRequest(data.request)
+      setSelectedSemester(String(semester))
+    } catch {
+      /* ignore */
+    }
+  }
+
   useEffect(() => {
     if (!user) return
     fetch('/api/faculty/availability', { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
-        setAvailabilityRequest(data.request)
-        if (data.request?.availability && Object.keys(data.request.availability).length) {
-          setAvailability({ ...DEFAULT_FACULTY_WEEKLY_AVAILABILITY, ...data.request.availability })
+        setAvailabilityRequests(data.requests || [])
+        applyAvailabilityRequest(data.request)
+        if (data.request?.semester) {
+          setSelectedSemester(String(data.request.semester))
         }
       })
       .catch(() => {})
@@ -107,6 +135,11 @@ export default function FacultyDashboard() {
   }
 
   const handleUpdateAvailability = async () => {
+    if (!availabilityRequest?.id) {
+      toast.error('No admin request for this semester. Ask admin to send one from Faculty Availability.')
+      return
+    }
+
     setSubmittingAvailability(true)
     try {
       const res = await fetch('/api/faculty/availability', {
@@ -115,7 +148,8 @@ export default function FacultyDashboard() {
         credentials: 'include',
         body: JSON.stringify({
           availability,
-          requestId: availabilityRequest?.id || null,
+          requestId: availabilityRequest.id,
+          semester: availabilityRequest.semester,
           forceUpdate: true
         })
       })
@@ -124,13 +158,33 @@ export default function FacultyDashboard() {
         toast.error(data.error || 'Failed to submit availability')
         return
       }
-      toast.success('Availability submitted to admin')
-      setAvailabilityRequest(data.request)
+      toast.success(`Availability submitted for semester ${data.request?.semester || selectedSemester}`)
+      setAvailabilityRequests((prev) => {
+        const next = prev.filter((r) => r.semester !== data.request.semester)
+        return [...next, data.request].sort((a, b) => a.semester - b.semester)
+      })
+      applyAvailabilityRequest(data.request)
     } catch {
       toast.error('Failed to submit availability')
     } finally {
       setSubmittingAvailability(false)
     }
+  }
+
+  const handleSemesterChange = (value) => {
+    setSelectedSemester(value)
+    const local = availabilityRequests.find((r) => String(r.semester) === value)
+    if (local) {
+      applyAvailabilityRequest(local)
+    } else {
+      loadAvailabilityForSemester(value)
+    }
+  }
+
+  const semesterStatusLabel = (status) => {
+    if (status === 'requested') return 'Pending — action needed'
+    if (status === 'submitted') return 'Submitted'
+    return status
   }
 
   const handleSaveProfile = () => {
@@ -383,8 +437,61 @@ export default function FacultyDashboard() {
             <div className="space-y-6">
               <div>
                 <h2 className={facultyTheme.pageTitle}>My Availability</h2>
-                <p className="text-gray-500">Tell admin which days and hours you can teach</p>
+                <p className="text-gray-500">
+                  Submit weekly teaching hours for the semester admin requested
+                </p>
               </div>
+
+              {availabilityRequests.length === 0 ? (
+                <Card className="border-l-4 border-l-amber-500 bg-amber-50">
+                  <CardContent className="pt-5 flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-amber-900">No availability request yet</p>
+                      <p className="text-sm text-amber-800 mt-1">
+                        Admin must send a request from Faculty Availability (pick department and semester)
+                        before you can submit your hours.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Semester</CardTitle>
+                    <CardDescription>
+                      Select the semester admin asked for — each semester has its own availability
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-4 items-end">
+                      <div className="space-y-2 min-w-[200px]">
+                        <Label>Semester</Label>
+                        <Select value={selectedSemester} onValueChange={handleSemesterChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select semester" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availabilityRequests.map((req) => (
+                              <SelectItem key={req.id} value={String(req.semester)}>
+                                Semester {req.semester}
+                                {req.departmentName ? ` · ${req.departmentName}` : ''}
+                                {' — '}
+                                {semesterStatusLabel(req.status)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {availabilityRequest?.departmentName && (
+                        <p className="text-sm text-gray-600 pb-2">
+                          Department: <span className="font-medium">{availabilityRequest.departmentName}</span>
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {availabilityRequest?.status === 'requested' && (
                 <Card className="border-l-4 border-l-yellow-500 bg-yellow-50">
@@ -393,7 +500,11 @@ export default function FacultyDashboard() {
                     <div>
                       <p className="font-semibold text-yellow-900">Admin requested your availability</p>
                       <p className="text-sm text-yellow-800 mt-1">
-                        Semester {availabilityRequest.semester} — submit your weekly hours below so timetables can be generated.
+                        Semester {availabilityRequest.semester}
+                        {availabilityRequest.departmentName
+                          ? ` · ${availabilityRequest.departmentName}`
+                          : ''}
+                        — submit your weekly hours below so timetables can be generated.
                       </p>
                     </div>
                   </CardContent>
@@ -405,7 +516,8 @@ export default function FacultyDashboard() {
                   <CardContent className="pt-5 flex items-center gap-3">
                     <CheckCircle className="h-5 w-5 text-green-700" />
                     <p className="text-sm text-green-800 font-medium">
-                      Availability submitted — admin will use this when generating timetables. You can update and resubmit anytime.
+                      Semester {availabilityRequest.semester} availability submitted — you can update and
+                      resubmit anytime.
                     </p>
                   </CardContent>
                 </Card>
@@ -415,7 +527,9 @@ export default function FacultyDashboard() {
                 <CardHeader>
                   <CardTitle>Weekly Availability</CardTitle>
                   <CardDescription>
-                    For each day, enable teaching and set from–to times. Hard constraints (no double-booking) always apply during generation.
+                    {availabilityRequest
+                      ? `Semester ${availabilityRequest.semester}: enable days and set from–to times.`
+                      : 'For each day, enable teaching and set from–to times.'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -467,10 +581,16 @@ export default function FacultyDashboard() {
 
                   <Button
                     onClick={handleUpdateAvailability}
-                    disabled={submittingAvailability}
+                    disabled={submittingAvailability || !availabilityRequest?.id}
                     className={`w-full mt-6 ${facultyTheme.primaryBtn}`}
                   >
-                    {submittingAvailability ? 'Submitting...' : availabilityRequest?.status === 'submitted' ? 'Update & Resubmit to Admin' : 'Submit Availability to Admin'}
+                    {submittingAvailability
+                      ? 'Submitting...'
+                      : availabilityRequest?.status === 'submitted'
+                        ? `Update Semester ${availabilityRequest.semester} & Resubmit`
+                        : availabilityRequest
+                          ? `Submit Semester ${availabilityRequest.semester} Availability`
+                          : 'Submit Availability to Admin'}
                   </Button>
                 </CardContent>
               </Card>
